@@ -1,1 +1,74 @@
-Test
+The goal is to create a list of tests for a Python tool to evaluate your OCSP server product, ensuring it correctly addresses known issues and adheres to relevant standards like RFC 6960 (OCSP) and RFC 4806 (OCSP Extensions to IKEv2).
+The tests are categorized below based on critical areas of OCSP server functionality: Protocol Compliance, Certificate Status Handling, Error and Security Handling, and Performance.
+--------------------------------------------------------------------------------
+List of Tests for OCSP Server Product Evaluation
+I. Protocol Compliance and Message Format
+These tests ensure the server correctly implements the basic OCSP message structure and transport formats as defined primarily by RFC 6960.
+1. Request Transport Testing (HTTP Methods):
+    ◦ Test sending a well-formed OCSP request using HTTP GET (typically for small requests, less than 255 bytes after encoding).
+    ◦ Test sending a well-formed OCSP request using HTTP POST (typically for larger requests or when caching is not prioritized).
+2. Request/Response Encoding Validation:
+    ◦ Verify that the server correctly accepts and processes requests encoded using the DER encoding rules specified in ASN.1.
+    ◦ Verify that the server consistently outputs responses using the correct DER encoding.
+3. Basic Response Structure Checks:
+    ◦ Verify that a successful response includes the basic elements: version, responderID, producedAt time, certificate responses, signature algorithm OID, and digital signature computed over a hash of the response data.
+    ◦ Verify the reported protocol version is correct (e.g., v1(0)).
+4. Certificate Identifier (CertID) Verification:
+    ◦ Test requests where the CertID fields (hashAlgorithm, issuerNameHash, issuerKeyHash, serialNumber) are correctly formatted according to the certificate being checked.
+    ◦ Verify the server correctly uses SHA-1 hashing when identifying the issuer's name and public key hash, even if later algorithms are used for the signature.
+II. Certificate Status and Validity Logic
+These tests confirm that the server correctly processes certificate identification and returns the accurate status based on revocation lists (CRLs) or internal data.
+1. Valid Certificate Status:
+    ◦ Send a request for a known valid and non-revoked certificate and confirm the server returns the SUCCESSFUL response status and a certificate status of good.
+2. Revoked Certificate Status:
+    ◦ Send a request for a known revoked certificate and confirm the server returns the SUCCESSFUL response status and a certificate status of revoked.
+    ◦ For a revoked response, verify that the RevokedInfo structure contains the accurate revocationTime and, if provided, the revocationReason.
+3. Unknown/Unrecognized Certificate Status:
+    ◦ Send a request for a certificate issued by an unrecognized CA and verify the response status is typically unknown (indicating the responder does not serve that issuer).
+4. Handling Non-Issued Certificates:
+    ◦ Test the server's response for a certificate serial number it has no record of issuing (a "non-issued" certificate).
+    ◦ If the server supports the extended definition of the revoked status for non-issued certificates, confirm it returns the revoked status with the extended-revoked extension, the reason code certificateHold (6), and a revocation time of January 1, 1970.
+5. Response Timeliness Validation:
+    ◦ Verify that the response accurately sets the thisUpdate field (the most recent time status was known to be correct) and the producedAt field (the time the response was signed).
+    ◦ Verify the nextUpdate field (time at or before which newer information will be available) is set correctly, respecting maximum validity periods configured by policy.
+III. Error and Security Handling
+These tests focus on security measures, handling invalid inputs, and adhering to cryptographic trust requirements.
+1. Handling Malformed Requests (Protocol Errors):
+    ◦ Send requests that violate the basic OCSP syntax to ensure the server correctly rejects them with the malformedRequest (1) error code.
+    ◦ Test inputs that deliberately violate constraints of specific extensions (e.g., setting the Nonce length to 0 or exceeding 128 octets) to ensure rejection with malformedRequest.
+2. Handling Operational Errors:
+    ◦ Simulate internal service failures or unavailability to test if the server correctly returns internalError (2) or tryLater (3).
+3. Authentication and Authorization Errors:
+    ◦ Test responses when the client is not authorized to query the specific certificate status, expecting the unauthorized (6) error.
+    ◦ Test responses when a signed request is mandatory but missing, expecting the sigRequired (5) error.
+4. Replay Attack Prevention (Nonce Extension):
+    ◦ Test enabling and including the Nonce extension (id-pkix-ocsp-nonce) in requests.
+    ◦ Verify that the server includes the matching Nonce value in the response to cryptographically bind the message pair, preventing replay attacks.
+    ◦ Verify the server correctly handles required Nonce lengths (minimum 32 octets for requesters implementing RFC 9654).
+    ◦ If the server utilizes pre-produced responses, confirm the server logic to use a short validity interval (thisUpdate to nextUpdate) as a mitigation for potential Nonce absence/replay.
+5. Signature Trust Validation:
+    ◦ Verify that the signature on the response is valid using the issuing CA’s public key.
+    ◦ If the server uses Delegated Responders, verify that the responder certificate possesses the id-kp-OCSPSigning Extended Key Usage (EKU) extension.
+    ◦ If clients specify preferred signature algorithms, verify the server attempts to select a supported algorithm from the client's preference list.
+IV. Performance, Scalability, and Operational Checks
+These tests focus on ensuring the OCSP server is reliable and scalable in a production environment.
+1. Availability and Latency Monitoring:
+    ◦ Continuously monitor OCSP service availability and regularly measure end-to-end response times (latency), establishing a baseline for performance under typical load (aiming for low latency, possibly around a median of 20 ms, which is a recent benchmark).
+    ◦ Test performance impacts when validating certificates over geographically distributed networks (if applicable to the solution infrastructure).
+2. Load Testing and DoS Mitigation:
+    ◦ Conduct stress testing to determine the maximum request throughput and identify potential bottlenecks (e.g., related to processing power or HSM limitations for signing).
+    ◦ Simulate high-volume query floods to validate implemented rate limiting or network security measures intended to mitigate Denial of Service (DoS) attacks.
+3. Caching Mechanism Verification:
+    ◦ If the server employs response caching, verify that cached responses are served efficiently without compromising freshness (i.e., adhering to nextUpdate before serving a new status).
+    ◦ Check cache expiration logic against configured settings.
+V. IKEv2 Integration (RFC 4806)
+Since you are building a product intended for customers who may utilize IPsec/IKEv2, these tests verify compliance with RFC 4806 for "in-band" OCSP delivery.
+1. OCSP Content Extension Support:
+    ◦ Verify the server correctly uses and processes the "OCSP Content" extension (encoding type 14) within CERTREQ payloads (as a request for an OCSP response) and CERT payloads (as the container for the OCSP response).
+2. Request for OCSP Response:
+    ◦ Test generating an IKEv2 CERTREQ payload with encoding type 14 and verify the server accurately responds by including the appropriate OCSP response inside a CERT payload in the reply.
+3. Trusted Responder Identification:
+    ◦ Test handling a CERTREQ payload that specifically identifies known OCSP responder certificates (ocsp_signers) or trusted Certificate Authority (CA) hashes, verifying the server selects the correct signing authority based on configuration.
+4. Configuration Testing:
+    ◦ Ensure the server configuration correctly maps connection policy variables (e.g., allowing "request," "reply," or "both" OCSP behaviors in IKEv2 communication).
+
