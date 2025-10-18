@@ -1,3 +1,7 @@
-cryptography>=42.0.0
-requests>=2.31.0
-asn1crypto>=1.5.1
+# Core dependencies for OCSP Testing Application
+cryptography>=42.0.0,<44.0.0
+requests>=2.31.0,<3.0.0
+asn1crypto>=1.5.1,<2.0.0
+
+# Optional dependencies for enhanced functionality
+# Note: tkinter is included with Python standard library
