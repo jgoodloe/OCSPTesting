@@ -225,6 +225,24 @@ class OCSPMonitor:
                 
             self.log(f"[INFO] Downloading CRL from {crl_url}\n")
             resp = requests.get(crl_url, timeout=15)
+            
+            # Check if the response is valid
+            if resp.status_code != 200:
+                self.log(f"[ERROR] CRL download failed with HTTP {resp.status_code}\n")
+                return {
+                    "summary": f"[CRL CHECK SUMMARY]\n[ERROR] CRL download failed with HTTP {resp.status_code}\n",
+                    "error": f"CRL download failed: HTTP {resp.status_code}"
+                }
+            
+            # Check if the response is too small to be a valid CRL
+            if len(resp.content) < 100:  # CRLs should be at least 100 bytes
+                self.log(f"[ERROR] CRL download returned suspiciously small content ({len(resp.content)} bytes)\n")
+                self.log(f"[ERROR] Response content: {resp.content[:200]}\n")  # Show first 200 bytes for debugging
+                return {
+                    "summary": f"[CRL CHECK SUMMARY]\n[ERROR] CRL download returned invalid content ({len(resp.content)} bytes)\n",
+                    "error": "CRL download returned invalid content"
+                }
+            
             crl_file = f"crl_{uuid4().hex}"
             crl_path = os.path.join(os.getenv("TEMP", "/tmp"), crl_file)
             
@@ -572,7 +590,6 @@ class OCSPMonitor:
                                     self.log("[INFO] Found CRL Distribution Points in certificate\n")
                                     
                                     # Extract CRL URLs from the output
-                                    import re
                                     crl_urls = re.findall(r'http[s]?://[^\s]+\.crl', crl_dp_result.stdout)
                                     if crl_urls:
                                         self.log(f"[INFO] Found CRL URLs: {crl_urls}\n")
@@ -858,7 +875,33 @@ class OCSPMonitor:
         """Extract CRL URL from certificate"""
         cmd = ["openssl", "x509", "-in", cert_path, "-noout", "-text"]
         result = subprocess.run(cmd, capture_output=True, text=True)
+        
+        # Look for CRL Distribution Points section
+        in_crl_section = False
+        for line in result.stdout.splitlines():
+            line = line.strip()
+            
+            # Check if we're in the CRL Distribution Points section
+            if "X509v3 CRL Distribution Points:" in line:
+                in_crl_section = True
+                continue
+            elif line.startswith("X509v3 ") and "CRL Distribution Points" not in line:
+                # We've moved to a different section
+                in_crl_section = False
+                continue
+            
+            # If we're in the CRL section, look for HTTP/HTTPS URIs
+            if in_crl_section and "URI:" in line and ("http" in line or "https" in line):
+                # Extract the URI and check if it looks like a CRL URL
+                uri_part = line.split("URI:")[-1].strip()
+                if any(pattern in uri_part.lower() for pattern in ['.crl', 'crl/', 'crls/']):
+                    return uri_part
+        
+        # Fallback: look for any URI that contains CRL-related patterns
         for line in result.stdout.splitlines():
             if "URI:" in line and ("http" in line or "https" in line):
-                return line.split("URI:")[-1].strip()
+                uri_part = line.split("URI:")[-1].strip()
+                if any(pattern in uri_part.lower() for pattern in ['.crl', 'crl/', 'crls/']):
+                    return uri_part
+        
         return None
