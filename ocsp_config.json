@@ -1,0 +1,21 @@
+{
+  "ocsp_url": "http://ocsp.xca.xpki.com/ocsp",
+  "issuer_path": "C:/Users/jcgoo/Downloads/jasonocsptestissuer.cer",
+  "good_cert": "C:/Users/jcgoo/Downloads/jasonocsptest.cer",
+  "revoked_cert": "",
+  "unknown_ca_cert": "C:/Users/jcgoo/Downloads/timdhsca4.cer",
+  "client_cert": "",
+  "client_key": "",
+  "latency_samples": 5,
+  "enable_load_test": true,
+  "load_concurrency": 5,
+  "load_requests": 50,
+  "crl_override_url": "",
+  "check_validity": true,
+  "follow_log": true,
+  "show_info": true,
+  "show_warn": true,
+  "show_cmd": true,
+  "show_stderr": true,
+  "show_status": true
+}

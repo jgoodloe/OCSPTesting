@@ -16,14 +16,12 @@ def run_ikev2_tests() -> List[TestCaseResult]:
     r.end()
     results.append(r)
 
-    r = TestCaseResult(id=str(uuid.uuid4()), category="IKEv2", name="Trusted responder identification", status=TestCaseResult.__annotations__['status'].__args__[2])  # SKIP
-    r.status = TestCaseResult.__annotations__['status'].__args__[2]  # Ensures SKIP without importing enum twice
+    r = TestCaseResult(id=str(uuid.uuid4()), category="IKEv2", name="Trusted responder identification", status=TestStatus.SKIP)
     r.message = "Requires configured ocsp_signers/CA hashes in IKEv2 environment"
     r.end()
     results.append(r)
 
-    r = TestCaseResult(id=str(uuid.uuid4()), category="IKEv2", name="Configuration mapping (request/reply/both)", status=TestCaseResult.__annotations__['status'].__args__[2])
-    r.status = TestCaseResult.__annotations__['status'].__args__[2]
+    r = TestCaseResult(id=str(uuid.uuid4()), category="IKEv2", name="Configuration mapping (request/reply/both)", status=TestStatus.SKIP)
     r.message = "Validate via IKEv2 deployment testing; out of scope for this tool"
     r.end()
     results.append(r)

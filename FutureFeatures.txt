@@ -1,0 +1,44 @@
+CRL Signature Validation
+
+
+https://dsfau.github.io/blog/2017/04/06/Checking-OCSP-revocation-using-OpenSSL.html
+
+https://docs.openssl.org/3.0/man1/openssl-ocsp/#ocsp-client-options
+-serial num
+
+Same as the -cert option except the certificate with serial number num is added to the request. The serial number is interpreted as a decimal integer unless preceded by 0x. Negative integers can also be specified by preceding the value by a - sign.
+
+
+Nonces don't appear to be working or the test is incorrect
+Also add nonces to the initial ocsp test
+-nonce, -no_nonce
+
+Add an OCSP nonce extension to a request or disable OCSP nonce addition. Normally if an OCSP request is input using the -reqin option no nonce is added: using the -nonce option will force addition of a nonce. If an OCSP request is being created (using -cert and -serial options) a nonce is automatically added specifying -no_nonce overrides this.
+
+
+
+
+
+-trust_other
+
+The certificates specified by the -verify_other option should be explicitly trusted and no additional checks will be performed on them. This is useful when the complete responder certificate chain is not available or trusting a root CA is not appropriate.
+
+
+
+-VAfile file
+
+File or URI containing explicitly trusted responder certificates. Equivalent to the -verify_other and -trust_other options. The input can be in PEM, DER, or PKCS#12 format.
+
+
+Not sure if these should be there
+-no_chain
+
+Do not use certificates in the response as additional untrusted CA certificates.
+
+-no_explicit
+
+Do not explicitly trust the root CA if it is set to be trusted for OCSP signing.
+
+
+
+****** Build an extension for Kuna

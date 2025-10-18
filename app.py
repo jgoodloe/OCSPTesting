@@ -1,11 +1,14 @@
 import threading
 import tkinter as tk
-from tkinter import filedialog, messagebox, ttk
+from tkinter import filedialog, messagebox, ttk, scrolledtext
 from typing import List
 import os
+from datetime import datetime
 
 from ocsp_tester.runner import TestRunner, TestInputs
 from ocsp_tester.exporters import export_results_json, export_results_csv
+from ocsp_tester.config import ConfigManager, OCSPConfig
+from ocsp_tester.monitor import OCSPMonitor
 
 
 class OCSPTesterGUI(tk.Tk):
@@ -14,30 +17,66 @@ class OCSPTesterGUI(tk.Tk):
         self.title("OCSP Server Test Suite")
         self.geometry("1200x800")
 
-        self.var_ocsp_url = tk.StringVar()
-        self.var_issuer_path = tk.StringVar()
-        self.var_good_cert = tk.StringVar()
-        self.var_revoked_cert = tk.StringVar()
-        self.var_unknown_ca_cert = tk.StringVar()
+        # Initialize configuration manager
+        self.config_manager = ConfigManager()
+        self.config = self.config_manager.load_config()
+
+        self.var_ocsp_url = tk.StringVar(value=self.config.ocsp_url)
+        self.var_issuer_path = tk.StringVar(value=self.config.issuer_path)
+        self.var_good_cert = tk.StringVar(value=self.config.good_cert)
+        self.var_revoked_cert = tk.StringVar(value=self.config.revoked_cert)
+        self.var_unknown_ca_cert = tk.StringVar(value=self.config.unknown_ca_cert)
 
         # Optional client signing for sigRequired/auth tests
-        self.var_client_cert = tk.StringVar()
-        self.var_client_key = tk.StringVar()
+        self.var_client_cert = tk.StringVar(value=self.config.client_cert)
+        self.var_client_key = tk.StringVar(value=self.config.client_key)
 
-        self.var_latency_samples = tk.IntVar(value=5)
-        self.var_enable_load = tk.BooleanVar(value=False)
-        self.var_load_concurrency = tk.IntVar(value=5)
-        self.var_load_requests = tk.IntVar(value=50)
+        self.var_latency_samples = tk.IntVar(value=self.config.latency_samples)
+        self.var_enable_load = tk.BooleanVar(value=self.config.enable_load_test)
+        self.var_load_concurrency = tk.IntVar(value=self.config.load_concurrency)
+        self.var_load_requests = tk.IntVar(value=self.config.load_requests)
+
+        # Monitoring variables
+        self.var_crl_override_url = tk.StringVar(value=self.config.crl_override_url)
+        self.var_check_validity = tk.BooleanVar(value=self.config.check_validity)
+        self.var_follow_log = tk.BooleanVar(value=self.config.follow_log)
+        self.var_show_info = tk.BooleanVar(value=self.config.show_info)
+        self.var_show_warn = tk.BooleanVar(value=self.config.show_warn)
+        self.var_show_cmd = tk.BooleanVar(value=self.config.show_cmd)
+        self.var_show_stderr = tk.BooleanVar(value=self.config.show_stderr)
+        self.var_show_status = tk.BooleanVar(value=self.config.show_status)
 
         self.runner = TestRunner()
         self.results = []
+        self.monitor = None  # Will be initialized after UI is built
 
         self._build_ui()
+        
+        # Initialize monitor after UI is built
+        self.monitor = OCSPMonitor(log_callback=self._log_monitor)
 
     def _build_ui(self) -> None:
         pad = {"padx": 6, "pady": 4}
 
-        frm = ttk.Frame(self)
+        # Create notebook for tabs
+        self.notebook = ttk.Notebook(self)
+        self.notebook.pack(fill=tk.BOTH, expand=True, **pad)
+
+        # Testing tab
+        self.test_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.test_frame, text="OCSP Testing")
+        
+        # Monitoring tab
+        self.monitor_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.monitor_frame, text="OCSP/CRL Monitor")
+
+        self._build_testing_ui()
+        self._build_monitoring_ui()
+
+    def _build_testing_ui(self) -> None:
+        pad = {"padx": 6, "pady": 4}
+
+        frm = ttk.Frame(self.test_frame)
         frm.pack(fill=tk.X, **pad)
 
         ttk.Label(frm, text="OCSP URL").grid(row=0, column=0, sticky=tk.E)
@@ -80,23 +119,107 @@ class OCSPTesterGUI(tk.Tk):
         ttk.Label(perf, text="Total requests").grid(row=0, column=5, sticky=tk.E)
         ttk.Entry(perf, textvariable=self.var_load_requests, width=8).grid(row=0, column=6, sticky=tk.W)
 
-        actions = ttk.Frame(self)
+        actions = ttk.Frame(self.test_frame)
         actions.pack(fill=tk.X, **pad)
-        ttk.Button(actions, text="Run Tests", command=self._run_tests).pack(side=tk.LEFT)
+        
+        self.run_tests_btn = ttk.Button(actions, text="Run Tests", command=self._run_tests)
+        self.run_tests_btn.pack(side=tk.LEFT)
+        
+        # Progress indicator
+        self.progress_var = tk.StringVar(value="Ready")
+        self.progress_label = ttk.Label(actions, textvariable=self.progress_var)
+        self.progress_label.pack(side=tk.LEFT, padx=10)
+        
+        # Progress bar
+        self.progress_bar = ttk.Progressbar(actions, mode='indeterminate')
+        self.progress_bar.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        
         ttk.Button(actions, text="Export JSON", command=self._export_json).pack(side=tk.LEFT, padx=6)
-        ttk.Button(actions, text="Export CSV", command=self._export_csv).pack(side=tk.LEFT)
+        ttk.Button(actions, text="Export CSV", command=self._export_csv).pack(side=tk.LEFT, padx=6)
+        ttk.Button(actions, text="Save Config", command=self._save_config).pack(side=tk.LEFT, padx=6)
+        ttk.Button(actions, text="Load Config", command=self._load_config).pack(side=tk.LEFT)
+        ttk.Button(actions, text="Test Runner", command=self._test_runner).pack(side=tk.LEFT, padx=6)
+        ttk.Button(actions, text="Quick Test", command=self._quick_test).pack(side=tk.LEFT, padx=6)
 
-        self.tree = ttk.Treeview(self, columns=("category", "name", "status", "message"), show="headings")
+        self.tree = ttk.Treeview(self.test_frame, columns=("category", "name", "status", "message"), show="headings")
         self.tree.heading("category", text="Category")
         self.tree.heading("name", text="Test")
         self.tree.heading("status", text="Status")
         self.tree.heading("message", text="Message")
         self.tree.pack(fill=tk.BOTH, expand=True, **pad)
 
-        self.details = tk.Text(self, height=10)
+        self.details = tk.Text(self.test_frame, height=10)
         self.details.pack(fill=tk.BOTH, expand=False, **pad)
 
         self.tree.bind("<<TreeviewSelect>>", self._on_select)
+
+    def _build_monitoring_ui(self) -> None:
+        pad = {"padx": 6, "pady": 4}
+
+        # Certificate and issuer selection
+        cert_frame = ttk.Frame(self.monitor_frame)
+        cert_frame.pack(fill=tk.X, **pad)
+        
+        ttk.Label(cert_frame, text="Certificate File:").grid(row=0, column=0, sticky=tk.E)
+        ttk.Entry(cert_frame, textvariable=self.var_good_cert, width=80).grid(row=0, column=1, sticky=tk.W)
+        ttk.Button(cert_frame, text="Browse", command=self._browse).grid(row=0, column=2)
+
+        ttk.Label(cert_frame, text="Issuer Certificate:").grid(row=1, column=0, sticky=tk.E)
+        ttk.Entry(cert_frame, textvariable=self.var_issuer_path, width=80).grid(row=1, column=1, sticky=tk.W)
+        ttk.Button(cert_frame, text="Browse", command=lambda: self._browse(self.var_issuer_path)).grid(row=1, column=2)
+
+        # URLs
+        url_frame = ttk.Frame(self.monitor_frame)
+        url_frame.pack(fill=tk.X, **pad)
+        
+        ttk.Label(url_frame, text="OCSP URL:").grid(row=0, column=0, sticky=tk.E)
+        ttk.Entry(url_frame, textvariable=self.var_ocsp_url, width=80).grid(row=0, column=1, sticky=tk.W)
+
+        ttk.Label(url_frame, text="CRL Override URL:").grid(row=1, column=0, sticky=tk.E)
+        ttk.Entry(url_frame, textvariable=self.var_crl_override_url, width=80).grid(row=1, column=1, sticky=tk.W)
+
+        # Options
+        options_frame = ttk.Frame(self.monitor_frame)
+        options_frame.pack(fill=tk.X, **pad)
+        
+        ttk.Checkbutton(options_frame, text="Check Certificate Validity Period", variable=self.var_check_validity).grid(row=0, column=0, sticky=tk.W)
+
+        # Control buttons
+        control_frame = ttk.Frame(self.monitor_frame)
+        control_frame.pack(fill=tk.X, **pad)
+        
+        ttk.Button(control_frame, text="Run OCSP Check", command=self._run_ocsp_monitor).pack(side=tk.LEFT, padx=5)
+        ttk.Button(control_frame, text="Run CRL Check", command=self._run_crl_monitor).pack(side=tk.LEFT, padx=5)
+        ttk.Button(control_frame, text="Show Test Results", command=self._show_test_results_in_monitor).pack(side=tk.LEFT, padx=5)
+        ttk.Button(control_frame, text="Clear Log", command=self._clear_monitor_log).pack(side=tk.LEFT, padx=5)
+        ttk.Button(control_frame, text="Test Log", command=self._test_log).pack(side=tk.LEFT, padx=5)
+        
+        # Test Log button on a separate row to make it more visible
+        test_frame = ttk.Frame(self.monitor_frame)
+        test_frame.pack(fill=tk.X, **pad)
+        ttk.Button(test_frame, text="🔍 Test Log (Debug)", command=self._test_log, style="Accent.TButton").pack(side=tk.LEFT, padx=5)
+        
+        # Log filter options
+        filter_frame = ttk.Frame(self.monitor_frame)
+        filter_frame.pack(fill=tk.X, **pad)
+        
+        ttk.Checkbutton(filter_frame, text="Follow Log", variable=self.var_follow_log).pack(side=tk.LEFT, padx=5)
+        ttk.Checkbutton(filter_frame, text="[INFO]", variable=self.var_show_info).pack(side=tk.LEFT)
+        ttk.Checkbutton(filter_frame, text="[WARN]", variable=self.var_show_warn).pack(side=tk.LEFT)
+        ttk.Checkbutton(filter_frame, text="[CMD]", variable=self.var_show_cmd).pack(side=tk.LEFT)
+        ttk.Checkbutton(filter_frame, text="[STDERR]", variable=self.var_show_stderr).pack(side=tk.LEFT)
+        ttk.Checkbutton(filter_frame, text="[STATUS]", variable=self.var_show_status).pack(side=tk.LEFT)
+
+        # Summary labels
+        self.ocsp_summary = tk.StringVar(value="")
+        self.crl_summary = tk.StringVar(value="")
+        
+        ttk.Label(self.monitor_frame, textvariable=self.ocsp_summary, justify='left', foreground='blue', font=("Courier", 10)).pack(fill=tk.X, padx=10, pady=5)
+        ttk.Label(self.monitor_frame, textvariable=self.crl_summary, justify='left', foreground='blue', font=("Courier", 10)).pack(fill=tk.X, padx=10, pady=5)
+
+        # Output log
+        self.monitor_output = scrolledtext.ScrolledText(self.monitor_frame, height=25)
+        self.monitor_output.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
     def _browse(self, var: tk.StringVar) -> None:
         path = filedialog.askopenfilename(filetypes=[("Certificates", "*.pem *.cer *.crt *.der"), ("All files", "*.*")])
@@ -116,6 +239,7 @@ class OCSPTesterGUI(tk.Tk):
             enable_load_test=bool(self.var_enable_load.get()),
             load_concurrency=max(1, int(self.var_load_concurrency.get() or 1)),
             load_requests=max(1, int(self.var_load_requests.get() or 1)),
+            crl_override_url=self.var_crl_override_url.get().strip() or None,
         )
 
     def _run_tests(self) -> None:
@@ -124,17 +248,199 @@ class OCSPTesterGUI(tk.Tk):
             messagebox.showerror("Input error", "OCSP URL and Issuer CA are required.")
             return
 
+        # Clear previous results and show progress
         self.tree.delete(*self.tree.get_children())
         self.details.delete("1.0", tk.END)
+        
+        # Update UI to show tests are running
+        self.run_tests_btn.config(state='disabled', text='Running...')
+        self.progress_var.set("Running tests...")
+        self.progress_bar.start()
+        
+        # Start test execution in background thread
         threading.Thread(target=self._run_tests_thread, args=(inputs,), daemon=True).start()
 
     def _run_tests_thread(self, inputs: TestInputs) -> None:
         try:
-            self.results = self.runner.run_all(inputs)
-            for r in self.results:
+            # Update progress with detailed steps
+            self.progress_var.set("Initializing tests...")
+            self._log_monitor(f"[INFO] Starting test execution at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            self._log_monitor(f"[INFO] OCSP URL: {inputs.ocsp_url}\n")
+            self._log_monitor(f"[INFO] Issuer path: {inputs.issuer_path}\n")
+            
+            # Test runner instantiation
+            self.progress_var.set("Creating test runner...")
+            self._log_monitor("[INFO] Creating TestRunner instance...\n")
+            runner = TestRunner()
+            self._log_monitor("[INFO] TestRunner created successfully\n")
+            
+            # Run the tests with timeout protection
+            self.progress_var.set("Executing tests...")
+            self._log_monitor("[INFO] Starting test execution...\n")
+            
+            # Windows-compatible timeout mechanism
+            import threading
+            import time
+            
+            # Add timeout protection using threading
+            timeout_occurred = threading.Event()
+            test_results = None
+            test_exception = None
+            
+            def run_tests_with_timeout():
+                nonlocal test_results, test_exception
+                try:
+                    test_results = runner.run_all(inputs)
+                except Exception as e:
+                    test_exception = e
+            
+            # Start test execution in a separate thread
+            test_thread = threading.Thread(target=run_tests_with_timeout, daemon=True)
+            test_thread.start()
+            
+            # Wait for completion with timeout (5 minutes)
+            test_thread.join(timeout=300)  # 5 minutes
+            
+            if test_thread.is_alive():
+                # Test is still running, timeout occurred
+                self._log_monitor("[ERROR] Test execution timed out after 5 minutes\n")
+                raise Exception("Test execution timed out")
+            
+            if test_exception:
+                raise test_exception
+            
+            self.results = test_results
+            self._log_monitor(f"[INFO] Test execution completed successfully - {len(self.results)} results\n")
+            
+            # Update progress
+            self.progress_var.set("Processing results...")
+            self._log_monitor("[INFO] Processing test results...\n")
+            
+            # Populate the tree with results
+            for i, r in enumerate(self.results):
                 self.tree.insert("", tk.END, iid=r.id, values=(r.category, r.name, r.status.value, r.message))
+                if i % 5 == 0:  # Update progress every 5 tests
+                    self.progress_var.set(f"Processing results... ({i+1}/{len(self.results)})")
+            
+            # Update progress
+            self.progress_var.set("Updating monitoring window...")
+            self._log_monitor("[INFO] Updating monitoring window...\n")
+            
+            # Automatically show test results in monitoring window
+            self._show_test_results_in_monitor()
+            
+            # Also log to monitoring window that tests completed
+            self._log_monitor(f"\n[INFO] Test execution completed at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            self._log_monitor(f"[INFO] Total tests executed: {len(self.results)}\n")
+            
+            # Count results by status
+            status_counts = {}
+            for result in self.results:
+                status = result.status.value
+                status_counts[status] = status_counts.get(status, 0) + 1
+            
+            self._log_monitor(f"[INFO] Test results summary: {status_counts}\n")
+            self._log_monitor("="*80 + "\n")
+            
+            # Update progress to show completion
+            self.progress_var.set(f"Completed - {len(self.results)} tests run")
+            
         except Exception as exc:
+            self.progress_var.set("Error occurred")
+            self._log_monitor(f"[ERROR] Test execution failed: {str(exc)}\n")
+            self._log_monitor(f"[ERROR] Error type: {type(exc).__name__}\n")
+            import traceback
+            self._log_monitor(f"[ERROR] Traceback: {traceback.format_exc()}\n")
             messagebox.showerror("Execution error", str(exc))
+        finally:
+            # Re-enable UI elements
+            self.run_tests_btn.config(state='normal', text='Run Tests')
+            self.progress_bar.stop()
+
+    def _test_runner(self) -> None:
+        """Test the runner with minimal inputs to verify it's working"""
+        try:
+            self.progress_var.set("Testing runner...")
+            self.progress_bar.start()
+            
+            # Create minimal test inputs
+            from ocsp_tester.runner import TestInputs
+            test_inputs = TestInputs(
+                ocsp_url="http://ocsp.xca.xpki.com/ocsp",
+                issuer_path="",  # Empty to trigger validation
+                known_good_cert_path=None,
+                known_revoked_cert_path=None,
+                unknown_ca_cert_path=None,
+                client_sign_cert_path=None,
+                client_sign_key_path=None,
+                latency_samples=1,
+                enable_load_test=False,
+                load_concurrency=1,
+                load_requests=1,
+                crl_override_url=None
+            )
+            
+            # Test if runner can be instantiated
+            from ocsp_tester.runner import TestRunner
+            runner = TestRunner()
+            
+            self.progress_var.set("Runner test successful")
+            messagebox.showinfo("Test Runner", "Test runner is working correctly!")
+            
+        except Exception as exc:
+            self.progress_var.set("Runner test failed")
+            messagebox.showerror("Test Runner Error", f"Test runner failed: {str(exc)}")
+        finally:
+            self.progress_bar.stop()
+            self.progress_var.set("Ready")
+
+    def _quick_test(self) -> None:
+        """Run a quick test without certificates to check if the issue is with certificate loading"""
+        try:
+            self.progress_var.set("Running quick test...")
+            self.progress_bar.start()
+            self._log_monitor(f"[INFO] Starting quick test at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            
+            # Test just the basic test runner without certificates
+            from ocsp_tester.runner import TestRunner, TestInputs
+            
+            # Create test inputs with minimal data
+            test_inputs = TestInputs(
+                ocsp_url="http://ocsp.xca.xpki.com/ocsp",
+                issuer_path="",  # Empty to trigger validation
+                known_good_cert_path=None,
+                known_revoked_cert_path=None,
+                unknown_ca_cert_path=None,
+                client_sign_cert_path=None,
+                client_sign_key_path=None,
+                latency_samples=1,
+                enable_load_test=False,
+                load_concurrency=1,
+                load_requests=1,
+                crl_override_url=None
+            )
+            
+            self._log_monitor("[INFO] Created test inputs\n")
+            
+            # Test runner instantiation
+            runner = TestRunner()
+            self._log_monitor("[INFO] TestRunner instantiated\n")
+            
+            # This should fail quickly due to missing issuer path
+            try:
+                results = runner.run_all(test_inputs)
+                self._log_monitor(f"[INFO] Quick test completed - {len(results)} results\n")
+                messagebox.showinfo("Quick Test", f"Quick test completed with {len(results)} results!")
+            except Exception as e:
+                self._log_monitor(f"[INFO] Quick test failed as expected: {str(e)}\n")
+                messagebox.showinfo("Quick Test", f"Quick test failed as expected (missing certificates): {str(e)}")
+            
+        except Exception as exc:
+            self._log_monitor(f"[ERROR] Quick test failed: {str(exc)}\n")
+            messagebox.showerror("Quick Test Error", f"Quick test failed: {str(exc)}")
+        finally:
+            self.progress_bar.stop()
+            self.progress_var.set("Ready")
 
     def _on_select(self, _event=None) -> None:
         sel = self.tree.selection()
@@ -150,7 +456,21 @@ class OCSPTesterGUI(tk.Tk):
             self.details.insert(tk.END, f"Status: {match.status.value}\n")
             self.details.insert(tk.END, f"Message: {match.message}\n\n")
             for k, v in match.details.items():
-                self.details.insert(tk.END, f"{k}: {v}\n")
+                if isinstance(v, dict):
+                    self.details.insert(tk.END, f"{k}:\n")
+                    for sub_k, sub_v in v.items():
+                        if isinstance(sub_v, (list, dict)):
+                            self.details.insert(tk.END, f"  {sub_k}: {sub_v}\n")
+                        else:
+                            self.details.insert(tk.END, f"  {sub_k}: {sub_v}\n")
+                    self.details.insert(tk.END, "\n")
+                elif isinstance(v, list):
+                    self.details.insert(tk.END, f"{k}:\n")
+                    for item in v:
+                        self.details.insert(tk.END, f"  - {item}\n")
+                    self.details.insert(tk.END, "\n")
+                else:
+                    self.details.insert(tk.END, f"{k}: {v}\n")
 
     def _export_json(self) -> None:
         if not self.results:
@@ -171,6 +491,216 @@ class OCSPTesterGUI(tk.Tk):
             return
         export_results_csv(self.results, path)
         messagebox.showinfo("Export", f"Saved to {path}")
+
+    def _save_config(self) -> None:
+        """Save current configuration to file"""
+        try:
+            # Update config with current values
+            self.config.ocsp_url = self.var_ocsp_url.get().strip()
+            self.config.issuer_path = self.var_issuer_path.get().strip()
+            self.config.good_cert = self.var_good_cert.get().strip()
+            self.config.revoked_cert = self.var_revoked_cert.get().strip()
+            self.config.unknown_ca_cert = self.var_unknown_ca_cert.get().strip()
+            self.config.client_cert = self.var_client_cert.get().strip()
+            self.config.client_key = self.var_client_key.get().strip()
+            self.config.latency_samples = max(1, int(self.var_latency_samples.get() or 1))
+            self.config.enable_load_test = bool(self.var_enable_load.get())
+            self.config.load_concurrency = max(1, int(self.var_load_concurrency.get() or 1))
+            self.config.load_requests = max(1, int(self.var_load_requests.get() or 1))
+            
+            # Update monitoring settings
+            self.config.crl_override_url = self.var_crl_override_url.get().strip()
+            self.config.check_validity = bool(self.var_check_validity.get())
+            self.config.follow_log = bool(self.var_follow_log.get())
+            self.config.show_info = bool(self.var_show_info.get())
+            self.config.show_warn = bool(self.var_show_warn.get())
+            self.config.show_cmd = bool(self.var_show_cmd.get())
+            self.config.show_stderr = bool(self.var_show_stderr.get())
+            self.config.show_status = bool(self.var_show_status.get())
+            
+            if self.config_manager.save_config(self.config):
+                messagebox.showinfo("Config", "Configuration saved successfully!")
+            else:
+                messagebox.showerror("Config", "Failed to save configuration.")
+        except Exception as exc:
+            messagebox.showerror("Config", f"Error saving configuration: {exc}")
+
+    def _load_config(self) -> None:
+        """Load configuration from file"""
+        try:
+            self.config = self.config_manager.load_config()
+            
+            # Update UI with loaded values
+            self.var_ocsp_url.set(self.config.ocsp_url)
+            self.var_issuer_path.set(self.config.issuer_path)
+            self.var_good_cert.set(self.config.good_cert)
+            self.var_revoked_cert.set(self.config.revoked_cert)
+            self.var_unknown_ca_cert.set(self.config.unknown_ca_cert)
+            self.var_client_cert.set(self.config.client_cert)
+            self.var_client_key.set(self.config.client_key)
+            self.var_latency_samples.set(self.config.latency_samples)
+            self.var_enable_load.set(self.config.enable_load_test)
+            self.var_load_concurrency.set(self.config.load_concurrency)
+            self.var_load_requests.set(self.config.load_requests)
+            
+            # Update monitoring variables
+            self.var_crl_override_url.set(self.config.crl_override_url)
+            self.var_check_validity.set(self.config.check_validity)
+            self.var_follow_log.set(self.config.follow_log)
+            self.var_show_info.set(self.config.show_info)
+            self.var_show_warn.set(self.config.show_warn)
+            self.var_show_cmd.set(self.config.show_cmd)
+            self.var_show_stderr.set(self.config.show_stderr)
+            self.var_show_status.set(self.config.show_status)
+            
+            messagebox.showinfo("Config", "Configuration loaded successfully!")
+        except Exception as exc:
+            messagebox.showerror("Config", f"Error loading configuration: {exc}")
+
+    def _log_monitor(self, text: str) -> None:
+        """Log callback for monitoring"""
+        # Debug: Always show the first few characters to verify callback is working
+        print(f"DEBUG: _log_monitor called with: {repr(text[:50])}")
+        
+        if ("[INFO]" in text and not self.var_show_info.get()) or \
+           ("[WARN]" in text and not self.var_show_warn.get()) or \
+           ("[CMD]" in text and not self.var_show_cmd.get()) or \
+           ("[STDERR]" in text and not self.var_show_stderr.get()) or \
+           ("[STATUS]" in text and not self.var_show_status.get()):
+            print(f"DEBUG: Message filtered out: {repr(text[:50])}")
+            return
+        
+        print(f"DEBUG: Adding to monitor output: {repr(text[:50])}")
+        self.monitor_output.insert(tk.END, text)
+        if self.var_follow_log.get():
+            self.monitor_output.see(tk.END)
+
+    def _clear_monitor_log(self) -> None:
+        """Clear monitoring log"""
+        self.monitor_output.delete(1.0, tk.END)
+
+    def _test_log(self) -> None:
+        """Test the logging mechanism"""
+        print("DEBUG: Test Log button clicked!")
+        self._log_monitor("[INFO] Test log message - this should appear in the monitoring window\n")
+        self._log_monitor("[WARN] Test warning message\n")
+        self._log_monitor("[CMD] Test command message\n")
+        self._log_monitor("[STATUS] Test status message\n")
+        self._log_monitor("Plain text message without tags\n")
+        print("DEBUG: Test log messages sent!")
+
+    def _show_test_results_in_monitor(self) -> None:
+        """Display latest test results in monitoring window"""
+        if not hasattr(self, 'results') or not self.results:
+            self._log_monitor("[INFO] No test results available. Run tests first.\n")
+            return
+        
+        self._log_monitor("\n" + "="*80 + "\n")
+        self._log_monitor("LATEST TEST RESULTS\n")
+        self._log_monitor("="*80 + "\n\n")
+        
+        # Group results by category
+        categories = {}
+        for result in self.results:
+            if result.category not in categories:
+                categories[result.category] = []
+            categories[result.category].append(result)
+        
+        # Display results by category
+        for category, results in categories.items():
+            self._log_monitor(f"[{category.upper()} TESTS]\n")
+            self._log_monitor("-" * 40 + "\n")
+            
+            for result in results:
+                status_icon = "✅" if result.status.value == "PASS" else "❌" if result.status.value == "FAIL" else "⚠️" if result.status.value == "WARN" else "⏭️" if result.status.value == "SKIP" else "💥"
+                self._log_monitor(f"{status_icon} {result.name}\n")
+                self._log_monitor(f"   Status: {result.status.value}\n")
+                self._log_monitor(f"   Message: {result.message}\n")
+                
+                if result.details:
+                    self._log_monitor("   Details:\n")
+                    for key, value in result.details.items():
+                        if isinstance(value, dict):
+                            self._log_monitor(f"     {key}:\n")
+                            for sub_key, sub_value in value.items():
+                                if isinstance(sub_value, (list, dict)):
+                                    self._log_monitor(f"       {sub_key}: {sub_value}\n")
+                                else:
+                                    self._log_monitor(f"       {sub_key}: {sub_value}\n")
+                        elif isinstance(value, list):
+                            self._log_monitor(f"     {key}:\n")
+                            for item in value:
+                                self._log_monitor(f"       - {item}\n")
+                        else:
+                            self._log_monitor(f"     {key}: {value}\n")
+                
+                self._log_monitor(f"   Duration: {result.duration_ms}ms\n")
+                self._log_monitor("\n")
+            
+            self._log_monitor("\n")
+        
+        self._log_monitor("="*80 + "\n")
+        self._log_monitor(f"Total Tests: {len(self.results)}\n")
+        
+        # Count by status
+        status_counts = {}
+        for result in self.results:
+            status = result.status.value
+            status_counts[status] = status_counts.get(status, 0) + 1
+        
+        self._log_monitor("Status Summary:\n")
+        for status, count in status_counts.items():
+            self._log_monitor(f"  {status}: {count}\n")
+        
+        self._log_monitor("="*80 + "\n\n")
+
+    def _run_ocsp_monitor(self) -> None:
+        """Run OCSP monitoring check"""
+        cert = self.var_good_cert.get()
+        issuer = self.var_issuer_path.get()
+        url = self.var_ocsp_url.get()
+        
+        if not cert or not issuer:
+            messagebox.showerror("Input Error", "Please select both a certificate and issuer file.")
+            return
+            
+        # Update monitor settings
+        self.monitor.check_validity = self.var_check_validity.get()
+        
+        threading.Thread(target=self._ocsp_monitor_thread, args=(cert, issuer, url), daemon=True).start()
+
+    def _run_crl_monitor(self) -> None:
+        """Run CRL monitoring check"""
+        cert = self.var_good_cert.get()
+        issuer = self.var_issuer_path.get()
+        crl_url = self.var_crl_override_url.get()
+        
+        if not cert or not issuer:
+            messagebox.showerror("Input Error", "Please select both a certificate and issuer file.")
+            return
+            
+        # Update monitor settings
+        self.monitor.check_validity = self.var_check_validity.get()
+        
+        threading.Thread(target=self._crl_monitor_thread, args=(cert, issuer, crl_url), daemon=True).start()
+
+    def _ocsp_monitor_thread(self, cert: str, issuer: str, url: str) -> None:
+        """OCSP monitoring thread"""
+        try:
+            results = self.monitor.run_ocsp_check(cert, issuer, url)
+            if "summary" in results:
+                self.ocsp_summary.set(results["summary"])
+        except Exception as exc:
+            self._log_monitor(f"[ERROR] OCSP Monitor Exception: {exc}\n")
+
+    def _crl_monitor_thread(self, cert: str, issuer: str, crl_url: str) -> None:
+        """CRL monitoring thread"""
+        try:
+            results = self.monitor.run_crl_check(cert, issuer, crl_url)
+            if "summary" in results:
+                self.crl_summary.set(results["summary"])
+        except Exception as exc:
+            self._log_monitor(f"[ERROR] CRL Monitor Exception: {exc}\n")
 
 
 if __name__ == "__main__":

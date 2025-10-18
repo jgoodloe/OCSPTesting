@@ -46,7 +46,12 @@ def _build_request(spec: OCSPRequestSpec, nonce_bytes: Optional[bytes] = None) -
     builder = builder.add_certificate(spec.cert, spec.issuer, spec.hash_algo)
     used_nonce = None
     if spec.include_nonce:
-        used_nonce = nonce_bytes if nonce_bytes is not None else (base64.b16decode(base64.b16encode(b"x" * spec.nonce_len)))
+        if nonce_bytes is not None:
+            used_nonce = nonce_bytes
+        else:
+            # Generate proper random nonce
+            import os
+            used_nonce = os.urandom(spec.nonce_len)
         # cryptography has OCSPNonce helper via x509.OCSPNonce in add_extension
         builder = builder.add_extension(x509.OCSPNonce(used_nonce), critical=False)
     req = builder.build()
@@ -93,16 +98,19 @@ def send_ocsp_request(
     this_upd = None
     next_upd = None
     if ocsp_resp.response_status == OCSPResponseStatus.SUCCESSFUL and ocsp_resp.responses:
-        r0 = ocsp_resp.responses[0]
-        cert_status = r0.cert_status.name
-        if r0.revocation_reason is not None:
-            rev_reason = r0.revocation_reason.name
-        if r0.revocation_time is not None:
-            rev_time = r0.revocation_time.strftime("%Y-%m-%dT%H:%M:%SZ")
-        if r0.this_update is not None:
-            this_upd = r0.this_update.strftime("%Y-%m-%dT%H:%M:%SZ")
-        if r0.next_update is not None:
-            next_upd = r0.next_update.strftime("%Y-%m-%dT%H:%M:%SZ")
+        # Convert iterator to list to make it subscriptable
+        responses = list(ocsp_resp.responses)
+        if responses:
+            r0 = responses[0]
+            cert_status = r0.certificate_status.name
+            if r0.revocation_reason is not None:
+                rev_reason = r0.revocation_reason.name
+            if r0.revocation_time_utc is not None:
+                rev_time = r0.revocation_time_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+            if r0.this_update_utc is not None:
+                this_upd = r0.this_update_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
+            if r0.next_update_utc is not None:
+                next_upd = r0.next_update_utc.strftime("%Y-%m-%dT%H:%M:%SZ")
 
     # Use asn1crypto to extract producedAt, responderID, version, signature OID and echoed Nonce
     produced_at = None
