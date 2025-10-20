@@ -17,5 +17,10 @@
   "show_warn": true,
   "show_cmd": true,
   "show_stderr": true,
-  "show_status": true
+  "show_status": true,
+  "show_debug": true,
+  "trust_anchor_path": "C:/Users/jcgoo/Downloads/FedBridge.cer",
+  "trust_anchor_type": "bridge",
+  "require_explicit_policy": true,
+  "inhibit_policy_mapping": true
 }

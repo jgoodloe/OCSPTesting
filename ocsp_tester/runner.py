@@ -14,6 +14,7 @@ from .tests_performance import run_perf_tests
 from .tests_ikev2 import run_ikev2_tests
 from .tests_crl import run_crl_tests
 from .tests_crl_comprehensive import run_crl_tests as run_crl_comprehensive_tests
+from .tests_path_validation import run_path_validation_tests
 
 
 @dataclass
@@ -30,6 +31,10 @@ class TestInputs:
     load_concurrency: int = 5
     load_requests: int = 50
     crl_override_url: Optional[str] = None
+    trust_anchor_path: Optional[str] = None
+    trust_anchor_type: str = "root"
+    require_explicit_policy: bool = False
+    inhibit_policy_mapping: bool = False
 
 
 def _load_cert(path: str) -> x509.Certificate:
@@ -55,7 +60,7 @@ def _load_cert(path: str) -> x509.Certificate:
 
 
 class TestRunner:
-    def run_all(self, inputs: TestInputs) -> List[TestCaseResult]:
+    def run_all(self, inputs: TestInputs, test_categories: Optional[dict] = None) -> List[TestCaseResult]:
         results: List[TestCaseResult] = []
 
         # Validate inputs first
@@ -100,46 +105,75 @@ class TestRunner:
         sample = good or revoked or issuer
 
         # Protocol tests (requires a leaf cert ideally)
-        try:
-            results.extend(run_protocol_tests(inputs.ocsp_url, issuer, sample))
-        except Exception as exc:
-            results.append(self._err("Protocol", "Run protocol tests", str(exc)))
+        if not test_categories or test_categories.get('ocsp_tests', True):
+            try:
+                results.extend(run_protocol_tests(inputs.ocsp_url, issuer, sample))
+            except Exception as exc:
+                results.append(self._err("Protocol", "Run protocol tests", str(exc)))
 
         # Status tests
-        try:
-            results.extend(run_status_tests(inputs.ocsp_url, issuer, good, revoked, unknown_ca))
-        except Exception as exc:
-            results.append(self._err("Status", "Run status tests", str(exc)))
+        if not test_categories or test_categories.get('ocsp_tests', True):
+            try:
+                results.extend(run_status_tests(inputs.ocsp_url, issuer, good, revoked, unknown_ca))
+            except Exception as exc:
+                results.append(self._err("Status", "Run status tests", str(exc)))
 
         # Security tests
-        try:
-            results.extend(run_security_tests(inputs.ocsp_url, issuer, good or sample, inputs.client_sign_cert_path, inputs.client_sign_key_path))
-        except Exception as exc:
-            results.append(self._err("Security", "Run security tests", str(exc)))
+        if not test_categories or test_categories.get('ocsp_tests', True):
+            try:
+                results.extend(run_security_tests(inputs.ocsp_url, issuer, good or sample, inputs.client_sign_cert_path, inputs.client_sign_key_path))
+            except Exception as exc:
+                results.append(self._err("Security", "Run security tests", str(exc)))
 
         # Performance tests
-        try:
-            results.extend(run_perf_tests(inputs.ocsp_url, issuer, sample, inputs.latency_samples, inputs.enable_load_test, inputs.load_concurrency, inputs.load_requests))
-        except Exception as exc:
-            results.append(self._err("Performance", "Run performance tests", str(exc)))
+        if not test_categories or test_categories.get('performance_tests', False):
+            try:
+                results.extend(run_perf_tests(inputs.ocsp_url, issuer, sample, inputs.latency_samples, inputs.enable_load_test, inputs.load_concurrency, inputs.load_requests))
+            except Exception as exc:
+                results.append(self._err("Performance", "Run performance tests", str(exc)))
 
         # CRL signature validation tests
-        try:
-            results.extend(run_crl_tests(inputs.ocsp_url, issuer, good, revoked))
-        except Exception as exc:
-            results.append(self._err("CRL", "Run CRL tests", str(exc)))
+        if not test_categories or test_categories.get('crl_tests', True):
+            try:
+                results.extend(run_crl_tests(inputs.ocsp_url, issuer, good, revoked))
+            except Exception as exc:
+                results.append(self._err("CRL", "Run CRL tests", str(exc)))
 
         # Comprehensive CRL tests
-        try:
-            results.extend(run_crl_comprehensive_tests(inputs.ocsp_url, issuer, good, revoked, inputs.crl_override_url))
-        except Exception as exc:
-            results.append(self._err("CRL", "Run comprehensive CRL tests", str(exc)))
+        if not test_categories or test_categories.get('crl_tests', True):
+            try:
+                results.extend(run_crl_comprehensive_tests(inputs.ocsp_url, issuer, good, revoked, inputs.crl_override_url))
+            except Exception as exc:
+                results.append(self._err("CRL", "Run comprehensive CRL tests", str(exc)))
 
         # IKEv2 placeholders
-        try:
-            results.extend(run_ikev2_tests())
-        except Exception as exc:
-            results.append(self._err("IKEv2", "Run IKEv2 tests", str(exc)))
+        if not test_categories or test_categories.get('ikev2_tests', False):
+            try:
+                results.extend(run_ikev2_tests())
+            except Exception as exc:
+                results.append(self._err("IKEv2", "Run IKEv2 tests", str(exc)))
+
+        # Certificate Path Validation tests
+        if not test_categories or test_categories.get('path_validation_tests', True):
+            try:
+                # Prepare test inputs for path validation
+                path_validation_inputs = {
+                    'ocsp_url': inputs.ocsp_url,
+                    'issuer_path': inputs.issuer_path,
+                    'good_cert_path': inputs.known_good_cert_path,
+                    'revoked_cert_path': inputs.known_revoked_cert_path,
+                    'unknown_ca_cert_path': inputs.unknown_ca_cert_path,
+                    'crl_override_url': inputs.crl_override_url,
+                    'client_cert_path': inputs.client_sign_cert_path,
+                    'client_key_path': inputs.client_sign_key_path,
+                    'trust_anchor_path': inputs.trust_anchor_path,
+                    'trust_anchor_type': inputs.trust_anchor_type,
+                    'require_explicit_policy': inputs.require_explicit_policy,
+                    'inhibit_policy_mapping': inputs.inhibit_policy_mapping
+                }
+                results.extend(run_path_validation_tests(path_validation_inputs))
+            except Exception as exc:
+                results.append(self._err("Path Validation", "Run certificate path validation tests", str(exc)))
 
         return results
 

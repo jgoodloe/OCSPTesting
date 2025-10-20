@@ -45,6 +45,14 @@ class OCSPTesterGUI(tk.Tk):
         self.var_show_cmd = tk.BooleanVar(value=self.config.show_cmd)
         self.var_show_stderr = tk.BooleanVar(value=self.config.show_stderr)
         self.var_show_status = tk.BooleanVar(value=self.config.show_status)
+        self.var_show_debug = tk.BooleanVar(value=self.config.show_debug)
+        
+        
+        # Trust anchor configuration variables
+        self.var_trust_anchor = tk.StringVar(value=self.config.trust_anchor_path)
+        self.var_trust_anchor_type = tk.StringVar(value=self.config.trust_anchor_type)
+        self.var_require_explicit_policy = tk.BooleanVar(value=self.config.require_explicit_policy)
+        self.var_inhibit_policy_mapping = tk.BooleanVar(value=self.config.inhibit_policy_mapping)
 
         self.runner = TestRunner()
         self.results = []
@@ -105,6 +113,32 @@ class OCSPTesterGUI(tk.Tk):
         ttk.Label(frm, text="Client key (optional)").grid(row=6, column=0, sticky=tk.E)
         ttk.Entry(frm, textvariable=self.var_client_key, width=80).grid(row=6, column=1, sticky=tk.W)
         ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_client_key)).grid(row=6, column=2)
+        
+        # Trust anchor configuration
+        ttk.Label(frm, text="Trust Anchor (optional)").grid(row=7, column=0, sticky=tk.E)
+        ttk.Entry(frm, textvariable=self.var_trust_anchor, width=80).grid(row=7, column=1, sticky=tk.W)
+        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_trust_anchor)).grid(row=7, column=2)
+        
+        # Trust anchor type and options
+        trust_anchor_frame = ttk.LabelFrame(self.test_frame, text="Trust Anchor Configuration", padding=5)
+        trust_anchor_frame.pack(fill=tk.X, **pad)
+        
+        # Trust anchor type selection
+        ttk.Label(trust_anchor_frame, text="Trust Anchor Type:").grid(row=0, column=0, sticky=tk.W, **pad)
+        trust_anchor_type_frame = ttk.Frame(trust_anchor_frame)
+        trust_anchor_type_frame.grid(row=0, column=1, sticky=tk.W)
+        
+        ttk.Radiobutton(trust_anchor_type_frame, text="Root CA", variable=self.var_trust_anchor_type, value="root").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(trust_anchor_type_frame, text="Bridge CA", variable=self.var_trust_anchor_type, value="bridge").pack(side=tk.LEFT, padx=5)
+        ttk.Radiobutton(trust_anchor_type_frame, text="Intermediate CA", variable=self.var_trust_anchor_type, value="intermediate").pack(side=tk.LEFT, padx=5)
+        
+        # Trust anchor validation options
+        ttk.Label(trust_anchor_frame, text="Validation Options:").grid(row=1, column=0, sticky=tk.W, **pad)
+        options_frame = ttk.Frame(trust_anchor_frame)
+        options_frame.grid(row=1, column=1, sticky=tk.W)
+        
+        ttk.Checkbutton(options_frame, text="Require explicit policy", variable=self.var_require_explicit_policy).pack(side=tk.LEFT, padx=5)
+        ttk.Checkbutton(options_frame, text="Inhibit policy mapping", variable=self.var_inhibit_policy_mapping).pack(side=tk.LEFT, padx=5)
 
         sep = ttk.Separator(self)
         sep.pack(fill=tk.X, **pad)
@@ -118,6 +152,35 @@ class OCSPTesterGUI(tk.Tk):
         ttk.Entry(perf, textvariable=self.var_load_concurrency, width=8).grid(row=0, column=4, sticky=tk.W)
         ttk.Label(perf, text="Total requests").grid(row=0, column=5, sticky=tk.E)
         ttk.Entry(perf, textvariable=self.var_load_requests, width=8).grid(row=0, column=6, sticky=tk.W)
+
+        # Test category selection checkboxes
+        test_categories_frame = ttk.LabelFrame(self.test_frame, text="Test Categories", padding=10)
+        test_categories_frame.pack(fill=tk.X, **pad)
+        
+        # Create checkboxes for different test categories
+        self.var_enable_ocsp_tests = tk.BooleanVar(value=True)
+        self.var_enable_crl_tests = tk.BooleanVar(value=True)
+        self.var_enable_path_validation_tests = tk.BooleanVar(value=True)
+        self.var_enable_ikev2_tests = tk.BooleanVar(value=False)
+        self.var_enable_federal_bridge_tests = tk.BooleanVar(value=False)
+        self.var_enable_performance_tests = tk.BooleanVar(value=False)
+        
+        # First row of checkboxes
+        ttk.Checkbutton(test_categories_frame, text="OCSP Tests", variable=self.var_enable_ocsp_tests).grid(row=0, column=0, sticky=tk.W, padx=5)
+        ttk.Checkbutton(test_categories_frame, text="CRL Tests", variable=self.var_enable_crl_tests).grid(row=0, column=1, sticky=tk.W, padx=5)
+        ttk.Checkbutton(test_categories_frame, text="Path Validation Tests", variable=self.var_enable_path_validation_tests).grid(row=0, column=2, sticky=tk.W, padx=5)
+        
+        # Second row of checkboxes
+        ttk.Checkbutton(test_categories_frame, text="IKEv2 Tests", variable=self.var_enable_ikev2_tests).grid(row=1, column=0, sticky=tk.W, padx=5)
+        ttk.Checkbutton(test_categories_frame, text="Federal Bridge Tests", variable=self.var_enable_federal_bridge_tests).grid(row=1, column=1, sticky=tk.W, padx=5)
+        ttk.Checkbutton(test_categories_frame, text="Performance Tests", variable=self.var_enable_performance_tests).grid(row=1, column=2, sticky=tk.W, padx=5)
+        
+        # Add a "Select All" and "Select None" button
+        select_frame = ttk.Frame(test_categories_frame)
+        select_frame.grid(row=2, column=0, columnspan=3, pady=5)
+        ttk.Button(select_frame, text="Select All", command=self._select_all_test_categories).pack(side=tk.LEFT, padx=5)
+        ttk.Button(select_frame, text="Select None", command=self._select_none_test_categories).pack(side=tk.LEFT, padx=5)
+        ttk.Button(select_frame, text="Default Selection", command=self._select_default_test_categories).pack(side=tk.LEFT, padx=5)
 
         actions = ttk.Frame(self.test_frame)
         actions.pack(fill=tk.X, **pad)
@@ -140,6 +203,7 @@ class OCSPTesterGUI(tk.Tk):
         ttk.Button(actions, text="Load Config", command=self._load_config).pack(side=tk.LEFT)
         ttk.Button(actions, text="Test Runner", command=self._test_runner).pack(side=tk.LEFT, padx=6)
         ttk.Button(actions, text="Quick Test", command=self._quick_test).pack(side=tk.LEFT, padx=6)
+        ttk.Button(actions, text="Path Validation", command=self._run_path_validation_tests).pack(side=tk.LEFT, padx=6)
 
         self.tree = ttk.Treeview(self.test_frame, columns=("category", "name", "status", "message"), show="headings")
         self.tree.heading("category", text="Category")
@@ -206,6 +270,7 @@ class OCSPTesterGUI(tk.Tk):
         ttk.Checkbutton(filter_frame, text="Follow Log", variable=self.var_follow_log).pack(side=tk.LEFT, padx=5)
         ttk.Checkbutton(filter_frame, text="[INFO]", variable=self.var_show_info).pack(side=tk.LEFT)
         ttk.Checkbutton(filter_frame, text="[WARN]", variable=self.var_show_warn).pack(side=tk.LEFT)
+        ttk.Checkbutton(filter_frame, text="[DEBUG]", variable=self.var_show_debug).pack(side=tk.LEFT)
         ttk.Checkbutton(filter_frame, text="[CMD]", variable=self.var_show_cmd).pack(side=tk.LEFT)
         ttk.Checkbutton(filter_frame, text="[STDERR]", variable=self.var_show_stderr).pack(side=tk.LEFT)
         ttk.Checkbutton(filter_frame, text="[STATUS]", variable=self.var_show_status).pack(side=tk.LEFT)
@@ -240,12 +305,28 @@ class OCSPTesterGUI(tk.Tk):
             load_concurrency=max(1, int(self.var_load_concurrency.get() or 1)),
             load_requests=max(1, int(self.var_load_requests.get() or 1)),
             crl_override_url=self.var_crl_override_url.get().strip() or None,
+            trust_anchor_path=self.var_trust_anchor.get().strip() or None,
+            trust_anchor_type=self.var_trust_anchor_type.get(),
+            require_explicit_policy=bool(self.var_require_explicit_policy.get()),
+            inhibit_policy_mapping=bool(self.var_inhibit_policy_mapping.get()),
         )
 
     def _run_tests(self) -> None:
         inputs = self._collect_inputs()
         if not inputs.ocsp_url or not inputs.issuer_path:
             messagebox.showerror("Input error", "OCSP URL and Issuer CA are required.")
+            return
+        
+        # Check if any test categories are selected
+        if not any([
+            self.var_enable_ocsp_tests.get(),
+            self.var_enable_crl_tests.get(),
+            self.var_enable_path_validation_tests.get(),
+            self.var_enable_ikev2_tests.get(),
+            self.var_enable_federal_bridge_tests.get(),
+            self.var_enable_performance_tests.get()
+        ]):
+            messagebox.showerror("Input error", "Please select at least one test category to run.")
             return
 
         # Clear previous results and show progress
@@ -290,7 +371,16 @@ class OCSPTesterGUI(tk.Tk):
             def run_tests_with_timeout():
                 nonlocal test_results, test_exception
                 try:
-                    test_results = runner.run_all(inputs)
+                    # Pass selected test categories to the runner
+                    test_categories = {
+                        'ocsp_tests': self.var_enable_ocsp_tests.get(),
+                        'crl_tests': self.var_enable_crl_tests.get(),
+                        'path_validation_tests': self.var_enable_path_validation_tests.get(),
+                        'ikev2_tests': self.var_enable_ikev2_tests.get(),
+                        'federal_bridge_tests': self.var_enable_federal_bridge_tests.get(),
+                        'performance_tests': self.var_enable_performance_tests.get()
+                    }
+                    test_results = runner.run_all(inputs, test_categories=test_categories)
                 except Exception as e:
                     test_exception = e
             
@@ -442,6 +532,72 @@ class OCSPTesterGUI(tk.Tk):
             self.progress_bar.stop()
             self.progress_var.set("Ready")
 
+    def _run_path_validation_tests(self) -> None:
+        """Run certificate path validation tests"""
+        try:
+            self.progress_var.set("Running path validation tests...")
+            self.progress_bar.start()
+            self._log_monitor(f"[INFO] Starting path validation tests at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+            
+            # Check if we have the required certificates
+            issuer_path = self.var_issuer_path.get().strip()
+            good_cert_path = self.var_good_cert.get().strip()
+            
+            if not issuer_path:
+                messagebox.showerror("Input Error", "Issuer certificate path is required for path validation tests.")
+                return
+                
+            if not good_cert_path:
+                messagebox.showerror("Input Error", "Good certificate path is required for path validation tests.")
+                return
+            
+            # Import path validation tests
+            from ocsp_tester.tests_path_validation import run_path_validation_tests
+            
+            # Prepare test inputs
+            test_inputs = {
+                'ocsp_url': self.var_ocsp_url.get().strip(),
+                'issuer_path': issuer_path,
+                'good_cert_path': good_cert_path,
+                'revoked_cert_path': self.var_revoked_cert.get().strip() or None,
+                'unknown_ca_cert_path': self.var_unknown_ca_cert.get().strip() or None,
+                'crl_override_url': self.var_crl_override_url.get().strip() or None,
+                'client_cert_path': self.var_client_cert.get().strip() or None,
+                'client_key_path': self.var_client_key.get().strip() or None
+            }
+            
+            self._log_monitor("[INFO] Running certificate path validation tests...\n")
+            
+            # Run path validation tests with log callback
+            results = run_path_validation_tests(test_inputs, log_callback=self._log_monitor)
+            
+            self._log_monitor(f"[INFO] Path validation tests completed - {len(results)} results\n")
+            
+            # Clear previous results and populate with path validation results
+            self.tree.delete(*self.tree.get_children())
+            self.details.delete("1.0", tk.END)
+            
+            # Populate the tree with results
+            for i, r in enumerate(results):
+                self.tree.insert("", tk.END, iid=r.id, values=(r.category, r.name, r.status.value, r.message))
+            
+            # Show summary
+            pass_count = sum(1 for r in results if r.status.value == "PASS")
+            fail_count = sum(1 for r in results if r.status.value == "FAIL")
+            error_count = sum(1 for r in results if r.status.value == "ERROR")
+            
+            summary = f"Path Validation Tests Complete: {pass_count} PASS, {fail_count} FAIL, {error_count} ERROR"
+            self._log_monitor(f"[INFO] {summary}\n")
+            
+            messagebox.showinfo("Path Validation Tests", f"Path validation tests completed!\n\n{summary}")
+            
+        except Exception as exc:
+            self._log_monitor(f"[ERROR] Path validation tests failed: {str(exc)}\n")
+            messagebox.showerror("Path Validation Error", f"Path validation tests failed: {str(exc)}")
+        finally:
+            self.progress_bar.stop()
+            self.progress_var.set("Ready")
+
     def _on_select(self, _event=None) -> None:
         sel = self.tree.selection()
         if not sel:
@@ -514,9 +670,16 @@ class OCSPTesterGUI(tk.Tk):
             self.config.follow_log = bool(self.var_follow_log.get())
             self.config.show_info = bool(self.var_show_info.get())
             self.config.show_warn = bool(self.var_show_warn.get())
+            self.config.show_debug = bool(self.var_show_debug.get())
             self.config.show_cmd = bool(self.var_show_cmd.get())
             self.config.show_stderr = bool(self.var_show_stderr.get())
             self.config.show_status = bool(self.var_show_status.get())
+            
+            # Update trust anchor settings
+            self.config.trust_anchor_path = self.var_trust_anchor.get().strip()
+            self.config.trust_anchor_type = self.var_trust_anchor_type.get()
+            self.config.require_explicit_policy = bool(self.var_require_explicit_policy.get())
+            self.config.inhibit_policy_mapping = bool(self.var_inhibit_policy_mapping.get())
             
             if self.config_manager.save_config(self.config):
                 messagebox.showinfo("Config", "Configuration saved successfully!")
@@ -549,9 +712,16 @@ class OCSPTesterGUI(tk.Tk):
             self.var_follow_log.set(self.config.follow_log)
             self.var_show_info.set(self.config.show_info)
             self.var_show_warn.set(self.config.show_warn)
+            self.var_show_debug.set(self.config.show_debug)
             self.var_show_cmd.set(self.config.show_cmd)
             self.var_show_stderr.set(self.config.show_stderr)
             self.var_show_status.set(self.config.show_status)
+            
+            # Update trust anchor variables
+            self.var_trust_anchor.set(self.config.trust_anchor_path)
+            self.var_trust_anchor_type.set(self.config.trust_anchor_type)
+            self.var_require_explicit_policy.set(self.config.require_explicit_policy)
+            self.var_inhibit_policy_mapping.set(self.config.inhibit_policy_mapping)
             
             messagebox.showinfo("Config", "Configuration loaded successfully!")
         except Exception as exc:
@@ -559,18 +729,14 @@ class OCSPTesterGUI(tk.Tk):
 
     def _log_monitor(self, text: str) -> None:
         """Log callback for monitoring"""
-        # Debug: Always show the first few characters to verify callback is working
-        print(f"DEBUG: _log_monitor called with: {repr(text[:50])}")
-        
         if ("[INFO]" in text and not self.var_show_info.get()) or \
            ("[WARN]" in text and not self.var_show_warn.get()) or \
+           ("[DEBUG]" in text and not self.var_show_debug.get()) or \
            ("[CMD]" in text and not self.var_show_cmd.get()) or \
            ("[STDERR]" in text and not self.var_show_stderr.get()) or \
            ("[STATUS]" in text and not self.var_show_status.get()):
-            print(f"DEBUG: Message filtered out: {repr(text[:50])}")
             return
         
-        print(f"DEBUG: Adding to monitor output: {repr(text[:50])}")
         self.monitor_output.insert(tk.END, text)
         if self.var_follow_log.get():
             self.monitor_output.see(tk.END)
@@ -584,10 +750,38 @@ class OCSPTesterGUI(tk.Tk):
         print("DEBUG: Test Log button clicked!")
         self._log_monitor("[INFO] Test log message - this should appear in the monitoring window\n")
         self._log_monitor("[WARN] Test warning message\n")
+        self._log_monitor("[DEBUG] Test debug message - Federal Bridge PKI chain discovery\n")
         self._log_monitor("[CMD] Test command message\n")
         self._log_monitor("[STATUS] Test status message\n")
         self._log_monitor("Plain text message without tags\n")
         print("DEBUG: Test log messages sent!")
+
+    def _select_all_test_categories(self) -> None:
+        """Select all test categories"""
+        self.var_enable_ocsp_tests.set(True)
+        self.var_enable_crl_tests.set(True)
+        self.var_enable_path_validation_tests.set(True)
+        self.var_enable_ikev2_tests.set(True)
+        self.var_enable_federal_bridge_tests.set(True)
+        self.var_enable_performance_tests.set(True)
+
+    def _select_none_test_categories(self) -> None:
+        """Select no test categories"""
+        self.var_enable_ocsp_tests.set(False)
+        self.var_enable_crl_tests.set(False)
+        self.var_enable_path_validation_tests.set(False)
+        self.var_enable_ikev2_tests.set(False)
+        self.var_enable_federal_bridge_tests.set(False)
+        self.var_enable_performance_tests.set(False)
+
+    def _select_default_test_categories(self) -> None:
+        """Select default test categories"""
+        self.var_enable_ocsp_tests.set(True)
+        self.var_enable_crl_tests.set(True)
+        self.var_enable_path_validation_tests.set(True)
+        self.var_enable_ikev2_tests.set(False)
+        self.var_enable_federal_bridge_tests.set(False)
+        self.var_enable_performance_tests.set(False)
 
     def _show_test_results_in_monitor(self) -> None:
         """Display latest test results in monitoring window"""
@@ -612,7 +806,7 @@ class OCSPTesterGUI(tk.Tk):
             self._log_monitor("-" * 40 + "\n")
             
             for result in results:
-                status_icon = "✅" if result.status.value == "PASS" else "❌" if result.status.value == "FAIL" else "⚠️" if result.status.value == "WARN" else "⏭️" if result.status.value == "SKIP" else "💥"
+                status_icon = "[PASS]" if result.status.value == "PASS" else "[FAIL]" if result.status.value == "FAIL" else "[WARN]" if result.status.value == "WARN" else "[SKIP]" if result.status.value == "SKIP" else "[ERROR]"
                 self._log_monitor(f"{status_icon} {result.name}\n")
                 self._log_monitor(f"   Status: {result.status.value}\n")
                 self._log_monitor(f"   Message: {result.message}\n")

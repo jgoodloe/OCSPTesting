@@ -28,6 +28,13 @@ class OCSPConfig:
     show_cmd: bool = True
     show_stderr: bool = True
     show_status: bool = True
+    show_debug: bool = True  # DEBUG logging toggle
+    
+    # Trust anchor settings
+    trust_anchor_path: str = ""
+    trust_anchor_type: str = "root"
+    require_explicit_policy: bool = False
+    inhibit_policy_mapping: bool = False
 
 
 class ConfigManager:
