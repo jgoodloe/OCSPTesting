@@ -60,24 +60,43 @@ def _load_cert(path: str) -> x509.Certificate:
 
 
 class TestRunner:
+    def __init__(self, log_callback=None):
+        self.log_callback = log_callback
+    
+    def _log(self, message: str):
+        """Log a message using the callback if available"""
+        if self.log_callback:
+            self.log_callback(message)
+    
     def run_all(self, inputs: TestInputs, test_categories: Optional[dict] = None) -> List[TestCaseResult]:
         results: List[TestCaseResult] = []
+        
+        self._log("[DEBUG] TestRunner.run_all() starting\n")
+        self._log(f"[DEBUG] Test categories enabled: {test_categories}\n")
+        self._log(f"[DEBUG] Input validation starting - OCSP URL: {inputs.ocsp_url}, Issuer: {inputs.issuer_path}\n")
 
         # Validate inputs first
         if not inputs.ocsp_url or not inputs.ocsp_url.strip():
+            self._log("[DEBUG] Input validation failed - OCSP URL is empty\n")
             r = TestCaseResult(id=str(uuid.uuid4()), category="Setup", name="Validate inputs", status=TestStatus.ERROR, message="OCSP URL is required")
             r.end()
             return [r]
         
         if not inputs.issuer_path or not inputs.issuer_path.strip():
+            self._log("[DEBUG] Input validation failed - Issuer path is empty\n")
             r = TestCaseResult(id=str(uuid.uuid4()), category="Setup", name="Validate inputs", status=TestStatus.ERROR, message="Issuer certificate path is required")
             r.end()
             return [r]
+        
+        self._log("[DEBUG] Input validation passed\n")
 
         # Load required certs
+        self._log("[DEBUG] Loading issuer certificate...\n")
         try:
             issuer = _load_cert(inputs.issuer_path)
+            self._log(f"[DEBUG] Issuer certificate loaded successfully - Subject: {issuer.subject}\n")
         except Exception as exc:
+            self._log(f"[DEBUG] Failed to load issuer certificate: {str(exc)}\n")
             r = TestCaseResult(id=str(uuid.uuid4()), category="Setup", name="Load issuer certificate", status=TestStatus.ERROR, message=str(exc))
             r.end()
             return [r]
@@ -85,76 +104,131 @@ class TestRunner:
         good = None
         revoked = None
         unknown_ca = None
+        
+        self._log("[DEBUG] Loading additional certificates...\n")
         if inputs.known_good_cert_path:
+            self._log(f"[DEBUG] Loading known-good certificate from: {inputs.known_good_cert_path}\n")
             try:
                 good = _load_cert(inputs.known_good_cert_path)
+                self._log(f"[DEBUG] Known-good certificate loaded successfully - Subject: {good.subject}\n")
             except Exception as exc:
+                self._log(f"[DEBUG] Failed to load known-good certificate: {str(exc)}\n")
                 results.append(self._err("Setup", "Load known-good certificate", str(exc)))
         if inputs.known_revoked_cert_path:
+            self._log(f"[DEBUG] Loading known-revoked certificate from: {inputs.known_revoked_cert_path}\n")
             try:
                 revoked = _load_cert(inputs.known_revoked_cert_path)
+                self._log(f"[DEBUG] Known-revoked certificate loaded successfully - Subject: {revoked.subject}\n")
             except Exception as exc:
+                self._log(f"[DEBUG] Failed to load known-revoked certificate: {str(exc)}\n")
                 results.append(self._err("Setup", "Load known-revoked certificate", str(exc)))
         if inputs.unknown_ca_cert_path:
+            self._log(f"[DEBUG] Loading unknown-CA certificate from: {inputs.unknown_ca_cert_path}\n")
             try:
                 unknown_ca = _load_cert(inputs.unknown_ca_cert_path)
+                self._log(f"[DEBUG] Unknown-CA certificate loaded successfully - Subject: {unknown_ca.subject}\n")
             except Exception as exc:
+                self._log(f"[DEBUG] Failed to load unknown-CA certificate: {str(exc)}\n")
                 results.append(self._err("Setup", "Load unknown-CA certificate", str(exc)))
 
         # Choose sample cert for protocol/perf (prefer good -> revoked -> issuer self check)
         sample = good or revoked or issuer
+        self._log(f"[DEBUG] Sample certificate selected for testing - Subject: {sample.subject}\n")
 
         # Protocol tests (requires a leaf cert ideally)
         if not test_categories or test_categories.get('ocsp_tests', True):
+            self._log("[DEBUG] Starting OCSP protocol tests...\n")
             try:
-                results.extend(run_protocol_tests(inputs.ocsp_url, issuer, sample))
+                protocol_results = run_protocol_tests(inputs.ocsp_url, issuer, sample)
+                self._log(f"[DEBUG] OCSP protocol tests completed - {len(protocol_results)} results\n")
+                results.extend(protocol_results)
             except Exception as exc:
+                self._log(f"[DEBUG] OCSP protocol tests failed: {str(exc)}\n")
                 results.append(self._err("Protocol", "Run protocol tests", str(exc)))
+        else:
+            self._log("[DEBUG] OCSP protocol tests skipped (disabled)\n")
 
         # Status tests
         if not test_categories or test_categories.get('ocsp_tests', True):
+            self._log("[DEBUG] Starting OCSP status tests...\n")
             try:
-                results.extend(run_status_tests(inputs.ocsp_url, issuer, good, revoked, unknown_ca))
+                status_results = run_status_tests(inputs.ocsp_url, issuer, good, revoked, unknown_ca)
+                self._log(f"[DEBUG] OCSP status tests completed - {len(status_results)} results\n")
+                results.extend(status_results)
             except Exception as exc:
+                self._log(f"[DEBUG] OCSP status tests failed: {str(exc)}\n")
                 results.append(self._err("Status", "Run status tests", str(exc)))
+        else:
+            self._log("[DEBUG] OCSP status tests skipped (disabled)\n")
 
         # Security tests
         if not test_categories or test_categories.get('ocsp_tests', True):
+            self._log("[DEBUG] Starting OCSP security tests...\n")
             try:
-                results.extend(run_security_tests(inputs.ocsp_url, issuer, good or sample, inputs.client_sign_cert_path, inputs.client_sign_key_path))
+                security_results = run_security_tests(inputs.ocsp_url, issuer, good or sample, inputs.client_sign_cert_path, inputs.client_sign_key_path)
+                self._log(f"[DEBUG] OCSP security tests completed - {len(security_results)} results\n")
+                results.extend(security_results)
             except Exception as exc:
+                self._log(f"[DEBUG] OCSP security tests failed: {str(exc)}\n")
                 results.append(self._err("Security", "Run security tests", str(exc)))
+        else:
+            self._log("[DEBUG] OCSP security tests skipped (disabled)\n")
 
         # Performance tests
         if not test_categories or test_categories.get('performance_tests', False):
+            self._log("[DEBUG] Starting performance tests...\n")
             try:
-                results.extend(run_perf_tests(inputs.ocsp_url, issuer, sample, inputs.latency_samples, inputs.enable_load_test, inputs.load_concurrency, inputs.load_requests))
+                perf_results = run_perf_tests(inputs.ocsp_url, issuer, sample, inputs.latency_samples, inputs.enable_load_test, inputs.load_concurrency, inputs.load_requests)
+                self._log(f"[DEBUG] Performance tests completed - {len(perf_results)} results\n")
+                results.extend(perf_results)
             except Exception as exc:
+                self._log(f"[DEBUG] Performance tests failed: {str(exc)}\n")
                 results.append(self._err("Performance", "Run performance tests", str(exc)))
+        else:
+            self._log("[DEBUG] Performance tests skipped (disabled)\n")
 
         # CRL signature validation tests
         if not test_categories or test_categories.get('crl_tests', True):
+            self._log("[DEBUG] Starting CRL tests...\n")
             try:
-                results.extend(run_crl_tests(inputs.ocsp_url, issuer, good, revoked))
+                crl_results = run_crl_tests(inputs.ocsp_url, issuer, good, revoked)
+                self._log(f"[DEBUG] CRL tests completed - {len(crl_results)} results\n")
+                results.extend(crl_results)
             except Exception as exc:
+                self._log(f"[DEBUG] CRL tests failed: {str(exc)}\n")
                 results.append(self._err("CRL", "Run CRL tests", str(exc)))
+        else:
+            self._log("[DEBUG] CRL tests skipped (disabled)\n")
 
         # Comprehensive CRL tests
         if not test_categories or test_categories.get('crl_tests', True):
+            self._log("[DEBUG] Starting comprehensive CRL tests...\n")
             try:
-                results.extend(run_crl_comprehensive_tests(inputs.ocsp_url, issuer, good, revoked, inputs.crl_override_url))
+                crl_comp_results = run_crl_comprehensive_tests(inputs.ocsp_url, issuer, good, revoked, inputs.crl_override_url)
+                self._log(f"[DEBUG] Comprehensive CRL tests completed - {len(crl_comp_results)} results\n")
+                results.extend(crl_comp_results)
             except Exception as exc:
+                self._log(f"[DEBUG] Comprehensive CRL tests failed: {str(exc)}\n")
                 results.append(self._err("CRL", "Run comprehensive CRL tests", str(exc)))
+        else:
+            self._log("[DEBUG] Comprehensive CRL tests skipped (disabled)\n")
 
         # IKEv2 placeholders
         if not test_categories or test_categories.get('ikev2_tests', False):
+            self._log("[DEBUG] Starting IKEv2 tests...\n")
             try:
-                results.extend(run_ikev2_tests())
+                ikev2_results = run_ikev2_tests()
+                self._log(f"[DEBUG] IKEv2 tests completed - {len(ikev2_results)} results\n")
+                results.extend(ikev2_results)
             except Exception as exc:
+                self._log(f"[DEBUG] IKEv2 tests failed: {str(exc)}\n")
                 results.append(self._err("IKEv2", "Run IKEv2 tests", str(exc)))
+        else:
+            self._log("[DEBUG] IKEv2 tests skipped (disabled)\n")
 
         # Certificate Path Validation tests
         if not test_categories or test_categories.get('path_validation_tests', True):
+            self._log("[DEBUG] Starting certificate path validation tests...\n")
             try:
                 # Prepare test inputs for path validation
                 path_validation_inputs = {
@@ -171,10 +245,24 @@ class TestRunner:
                     'require_explicit_policy': inputs.require_explicit_policy,
                     'inhibit_policy_mapping': inputs.inhibit_policy_mapping
                 }
-                results.extend(run_path_validation_tests(path_validation_inputs))
+                path_results = run_path_validation_tests(path_validation_inputs)
+                self._log(f"[DEBUG] Certificate path validation tests completed - {len(path_results)} results\n")
+                results.extend(path_results)
             except Exception as exc:
+                self._log(f"[DEBUG] Certificate path validation tests failed: {str(exc)}\n")
                 results.append(self._err("Path Validation", "Run certificate path validation tests", str(exc)))
+        else:
+            self._log("[DEBUG] Certificate path validation tests skipped (disabled)\n")
 
+        self._log(f"[DEBUG] TestRunner.run_all() completed - Total results: {len(results)}\n")
+        self._log(f"[DEBUG] Test execution summary:\n")
+        self._log(f"[DEBUG] - Protocol tests: {len([r for r in results if r.category == 'Protocol'])} results\n")
+        self._log(f"[DEBUG] - Status tests: {len([r for r in results if r.category == 'Status'])} results\n")
+        self._log(f"[DEBUG] - Security tests: {len([r for r in results if r.category == 'Security'])} results\n")
+        self._log(f"[DEBUG] - Performance tests: {len([r for r in results if r.category == 'Performance'])} results\n")
+        self._log(f"[DEBUG] - CRL tests: {len([r for r in results if r.category == 'CRL'])} results\n")
+        self._log(f"[DEBUG] - IKEv2 tests: {len([r for r in results if r.category == 'IKEv2'])} results\n")
+        self._log(f"[DEBUG] - Path Validation tests: {len([r for r in results if r.category == 'Path Validation'])} results\n")
         return results
 
     @staticmethod

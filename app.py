@@ -62,6 +62,10 @@ class OCSPTesterGUI(tk.Tk):
         
         # Initialize monitor after UI is built
         self.monitor = OCSPMonitor(log_callback=self._log_monitor)
+        
+        # Ensure debug logging is enabled by default
+        self.var_show_debug.set(True)
+        self._log_monitor("[DEBUG] Debug logging enabled by default\n")
 
     def _build_ui(self) -> None:
         pad = {"padx": 6, "pady": 4}
@@ -274,6 +278,14 @@ class OCSPTesterGUI(tk.Tk):
         ttk.Checkbutton(filter_frame, text="[CMD]", variable=self.var_show_cmd).pack(side=tk.LEFT)
         ttk.Checkbutton(filter_frame, text="[STDERR]", variable=self.var_show_stderr).pack(side=tk.LEFT)
         ttk.Checkbutton(filter_frame, text="[STATUS]", variable=self.var_show_status).pack(side=tk.LEFT)
+        
+        # Debug control buttons
+        debug_frame = ttk.Frame(self.monitor_frame)
+        debug_frame.pack(fill=tk.X, **pad)
+        
+        ttk.Button(debug_frame, text="Enable All Debug", command=self._enable_all_debug).pack(side=tk.LEFT, padx=5)
+        ttk.Button(debug_frame, text="Disable Debug", command=self._disable_debug).pack(side=tk.LEFT, padx=5)
+        ttk.Button(debug_frame, text="Test Debug Log", command=self._test_log).pack(side=tk.LEFT, padx=5)
 
         # Summary labels
         self.ocsp_summary = tk.StringVar(value="")
@@ -340,6 +352,10 @@ class OCSPTesterGUI(tk.Tk):
         
         # Start test execution in background thread
         threading.Thread(target=self._run_tests_thread, args=(inputs,), daemon=True).start()
+        
+        # Show debug reminder
+        if not self.var_show_debug.get():
+            messagebox.showinfo("Debug Logging", "Debug logging is currently disabled. Enable [DEBUG] checkbox in the OCSP/CRL Monitor tab to see detailed test execution information.")
 
     def _run_tests_thread(self, inputs: TestInputs) -> None:
         try:
@@ -349,15 +365,23 @@ class OCSPTesterGUI(tk.Tk):
             self._log_monitor(f"[INFO] OCSP URL: {inputs.ocsp_url}\n")
             self._log_monitor(f"[INFO] Issuer path: {inputs.issuer_path}\n")
             
+            # Enable debug logging for test execution
+            self._log_monitor("[DEBUG] Debug logging enabled for test execution\n")
+            self._log_monitor(f"[DEBUG] Test configuration: latency_samples={inputs.latency_samples}, load_test={inputs.enable_load_test}\n")
+            self._log_monitor(f"[DEBUG] Certificate paths - Good: {inputs.known_good_cert_path}, Revoked: {inputs.known_revoked_cert_path}\n")
+            
             # Test runner instantiation
             self.progress_var.set("Creating test runner...")
             self._log_monitor("[INFO] Creating TestRunner instance...\n")
-            runner = TestRunner()
+            self._log_monitor("[DEBUG] TestRunner initialization starting...\n")
+            runner = TestRunner(log_callback=self._log_monitor)
+            self._log_monitor("[DEBUG] TestRunner initialization completed\n")
             self._log_monitor("[INFO] TestRunner created successfully\n")
             
             # Run the tests with timeout protection
             self.progress_var.set("Executing tests...")
             self._log_monitor("[INFO] Starting test execution...\n")
+            self._log_monitor("[DEBUG] Test execution thread starting...\n")
             
             # Windows-compatible timeout mechanism
             import threading
@@ -371,6 +395,7 @@ class OCSPTesterGUI(tk.Tk):
             def run_tests_with_timeout():
                 nonlocal test_results, test_exception
                 try:
+                    self._log_monitor("[DEBUG] TestRunner.run_all() called\n")
                     # Pass selected test categories to the runner
                     test_categories = {
                         'ocsp_tests': self.var_enable_ocsp_tests.get(),
@@ -380,24 +405,36 @@ class OCSPTesterGUI(tk.Tk):
                         'federal_bridge_tests': self.var_enable_federal_bridge_tests.get(),
                         'performance_tests': self.var_enable_performance_tests.get()
                     }
+                    self._log_monitor(f"[DEBUG] Test categories enabled: {test_categories}\n")
                     test_results = runner.run_all(inputs, test_categories=test_categories)
+                    self._log_monitor(f"[DEBUG] TestRunner.run_all() completed with {len(test_results)} results\n")
                 except Exception as e:
                     test_exception = e
+                    self._log_monitor(f"[DEBUG] TestRunner.run_all() failed with exception: {str(e)}\n")
             
             # Start test execution in a separate thread
             test_thread = threading.Thread(target=run_tests_with_timeout, daemon=True)
             test_thread.start()
             
+            self._log_monitor("[DEBUG] Test execution thread started, waiting for completion...\n")
+            
             # Wait for completion with timeout (5 minutes)
             test_thread.join(timeout=300)  # 5 minutes
             
             if test_thread.is_alive():
+                self._log_monitor("[DEBUG] Test execution thread timed out after 5 minutes\n")
                 # Test is still running, timeout occurred
                 self._log_monitor("[ERROR] Test execution timed out after 5 minutes\n")
                 raise Exception("Test execution timed out")
+            else:
+                self._log_monitor("[DEBUG] Test execution thread completed successfully\n")
             
             if test_exception:
+                self._log_monitor(f"[DEBUG] Test execution failed with exception: {str(test_exception)}\n")
                 raise test_exception
+            
+            self._log_monitor(f"[DEBUG] Results processing starting...\n")
+            self._log_monitor(f"[DEBUG] Total test results received: {len(test_results)}\n")
             
             self.results = test_results
             self._log_monitor(f"[INFO] Test execution completed successfully - {len(self.results)} results\n")
@@ -744,6 +781,21 @@ class OCSPTesterGUI(tk.Tk):
     def _clear_monitor_log(self) -> None:
         """Clear monitoring log"""
         self.monitor_output.delete(1.0, tk.END)
+
+    def _enable_all_debug(self) -> None:
+        """Enable all debug logging options"""
+        self.var_show_debug.set(True)
+        self.var_show_info.set(True)
+        self.var_show_warn.set(True)
+        self.var_show_cmd.set(True)
+        self.var_show_stderr.set(True)
+        self.var_show_status.set(True)
+        self._log_monitor("[DEBUG] All debug logging options enabled\n")
+
+    def _disable_debug(self) -> None:
+        """Disable debug logging"""
+        self.var_show_debug.set(False)
+        self._log_monitor("[DEBUG] Debug logging disabled\n")
 
     def _test_log(self) -> None:
         """Test the logging mechanism"""
