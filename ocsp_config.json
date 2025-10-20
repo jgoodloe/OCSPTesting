@@ -1,7 +1,7 @@
 {
   "ocsp_url": "http://ocsp.xca.xpki.com/ocsp",
-  "issuer_path": "C:/Users/jcgoo/Downloads/jasonocsptestissuer.cer",
-  "good_cert": "C:/Users/jcgoo/Downloads/jasonocsptest.cer",
+  "issuer_path": "C:/ocsptesting/OCSPTesting/jasonocsptestissuer.cer",
+  "good_cert": "C:/ocsptesting/OCSPTesting/jasonocsptest.cer",
   "revoked_cert": "",
   "unknown_ca_cert": "C:/Users/jcgoo/Downloads/timdhsca4.cer",
   "client_cert": "",

@@ -94,38 +94,45 @@ class OCSPTesterGUI(tk.Tk):
         ttk.Label(frm, text="OCSP URL").grid(row=0, column=0, sticky=tk.E)
         ttk.Entry(frm, textvariable=self.var_ocsp_url, width=80).grid(row=0, column=1, sticky=tk.W)
 
-        ttk.Label(frm, text="Issuer CA").grid(row=1, column=0, sticky=tk.E)
-        ttk.Entry(frm, textvariable=self.var_issuer_path, width=80).grid(row=1, column=1, sticky=tk.W)
-        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_issuer_path)).grid(row=1, column=2)
+        ttk.Label(frm, text="CRL Override URL").grid(row=1, column=0, sticky=tk.E)
+        ttk.Entry(frm, textvariable=self.var_crl_override_url, width=80).grid(row=1, column=1, sticky=tk.W)
 
-        ttk.Label(frm, text="Known GOOD cert").grid(row=2, column=0, sticky=tk.E)
-        ttk.Entry(frm, textvariable=self.var_good_cert, width=80).grid(row=2, column=1, sticky=tk.W)
-        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_good_cert)).grid(row=2, column=2)
+        ttk.Label(frm, text="Issuer CA").grid(row=2, column=0, sticky=tk.E)
+        ttk.Entry(frm, textvariable=self.var_issuer_path, width=80).grid(row=2, column=1, sticky=tk.W)
+        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_issuer_path)).grid(row=2, column=2)
 
-        ttk.Label(frm, text="Known REVOKED cert").grid(row=3, column=0, sticky=tk.E)
-        ttk.Entry(frm, textvariable=self.var_revoked_cert, width=80).grid(row=3, column=1, sticky=tk.W)
-        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_revoked_cert)).grid(row=3, column=2)
+        ttk.Label(frm, text="Known GOOD cert").grid(row=3, column=0, sticky=tk.E)
+        ttk.Entry(frm, textvariable=self.var_good_cert, width=80).grid(row=3, column=1, sticky=tk.W)
+        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_good_cert)).grid(row=3, column=2)
 
-        ttk.Label(frm, text="Unknown-CA cert (optional)").grid(row=4, column=0, sticky=tk.E)
-        ttk.Entry(frm, textvariable=self.var_unknown_ca_cert, width=80).grid(row=4, column=1, sticky=tk.W)
-        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_unknown_ca_cert)).grid(row=4, column=2)
+        ttk.Label(frm, text="Known REVOKED cert").grid(row=4, column=0, sticky=tk.E)
+        ttk.Entry(frm, textvariable=self.var_revoked_cert, width=80).grid(row=4, column=1, sticky=tk.W)
+        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_revoked_cert)).grid(row=4, column=2)
 
-        ttk.Label(frm, text="Client cert (optional)").grid(row=5, column=0, sticky=tk.E)
-        ttk.Entry(frm, textvariable=self.var_client_cert, width=80).grid(row=5, column=1, sticky=tk.W)
-        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_client_cert)).grid(row=5, column=2)
+        ttk.Label(frm, text="Unknown-CA cert (optional)").grid(row=5, column=0, sticky=tk.E)
+        ttk.Entry(frm, textvariable=self.var_unknown_ca_cert, width=80).grid(row=5, column=1, sticky=tk.W)
+        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_unknown_ca_cert)).grid(row=5, column=2)
 
-        ttk.Label(frm, text="Client key (optional)").grid(row=6, column=0, sticky=tk.E)
-        ttk.Entry(frm, textvariable=self.var_client_key, width=80).grid(row=6, column=1, sticky=tk.W)
-        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_client_key)).grid(row=6, column=2)
+        ttk.Label(frm, text="Client cert (optional)").grid(row=6, column=0, sticky=tk.E)
+        ttk.Entry(frm, textvariable=self.var_client_cert, width=80).grid(row=6, column=1, sticky=tk.W)
+        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_client_cert)).grid(row=6, column=2)
+
+        ttk.Label(frm, text="Client key (optional)").grid(row=7, column=0, sticky=tk.E)
+        ttk.Entry(frm, textvariable=self.var_client_key, width=80).grid(row=7, column=1, sticky=tk.W)
+        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_client_key)).grid(row=7, column=2)
         
         # Trust anchor configuration
-        ttk.Label(frm, text="Trust Anchor (optional)").grid(row=7, column=0, sticky=tk.E)
-        ttk.Entry(frm, textvariable=self.var_trust_anchor, width=80).grid(row=7, column=1, sticky=tk.W)
-        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_trust_anchor)).grid(row=7, column=2)
+        ttk.Label(frm, text="Trust Anchor (optional)").grid(row=8, column=0, sticky=tk.E)
+        ttk.Entry(frm, textvariable=self.var_trust_anchor, width=80).grid(row=8, column=1, sticky=tk.W)
+        ttk.Button(frm, text="Browse", command=lambda: self._browse(self.var_trust_anchor)).grid(row=8, column=2)
         
-        # Trust anchor type and options
-        trust_anchor_frame = ttk.LabelFrame(self.test_frame, text="Trust Anchor Configuration", padding=5)
-        trust_anchor_frame.pack(fill=tk.X, **pad)
+        # Combined configuration and test categories frame
+        combined_frame = ttk.Frame(self.test_frame)
+        combined_frame.pack(fill=tk.X, **pad)
+        
+        # Trust anchor configuration (left side)
+        trust_anchor_frame = ttk.LabelFrame(combined_frame, text="Trust Anchor Configuration", padding=5)
+        trust_anchor_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
         
         # Trust anchor type selection
         ttk.Label(trust_anchor_frame, text="Trust Anchor Type:").grid(row=0, column=0, sticky=tk.W, **pad)
@@ -144,22 +151,9 @@ class OCSPTesterGUI(tk.Tk):
         ttk.Checkbutton(options_frame, text="Require explicit policy", variable=self.var_require_explicit_policy).pack(side=tk.LEFT, padx=5)
         ttk.Checkbutton(options_frame, text="Inhibit policy mapping", variable=self.var_inhibit_policy_mapping).pack(side=tk.LEFT, padx=5)
 
-        sep = ttk.Separator(self)
-        sep.pack(fill=tk.X, **pad)
-
-        perf = ttk.Frame(self)
-        perf.pack(fill=tk.X, **pad)
-        ttk.Label(perf, text="Latency samples").grid(row=0, column=0, sticky=tk.E)
-        ttk.Entry(perf, textvariable=self.var_latency_samples, width=8).grid(row=0, column=1, sticky=tk.W)
-        ttk.Checkbutton(perf, text="Enable load test", variable=self.var_enable_load).grid(row=0, column=2, sticky=tk.W)
-        ttk.Label(perf, text="Concurrency").grid(row=0, column=3, sticky=tk.E)
-        ttk.Entry(perf, textvariable=self.var_load_concurrency, width=8).grid(row=0, column=4, sticky=tk.W)
-        ttk.Label(perf, text="Total requests").grid(row=0, column=5, sticky=tk.E)
-        ttk.Entry(perf, textvariable=self.var_load_requests, width=8).grid(row=0, column=6, sticky=tk.W)
-
-        # Test category selection checkboxes
-        test_categories_frame = ttk.LabelFrame(self.test_frame, text="Test Categories", padding=10)
-        test_categories_frame.pack(fill=tk.X, **pad)
+        # Test category selection checkboxes (right side)
+        test_categories_frame = ttk.LabelFrame(combined_frame, text="Test Categories", padding=5)
+        test_categories_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
         
         # Create checkboxes for different test categories
         self.var_enable_ocsp_tests = tk.BooleanVar(value=True)
@@ -185,6 +179,19 @@ class OCSPTesterGUI(tk.Tk):
         ttk.Button(select_frame, text="Select All", command=self._select_all_test_categories).pack(side=tk.LEFT, padx=5)
         ttk.Button(select_frame, text="Select None", command=self._select_none_test_categories).pack(side=tk.LEFT, padx=5)
         ttk.Button(select_frame, text="Default Selection", command=self._select_default_test_categories).pack(side=tk.LEFT, padx=5)
+
+        sep = ttk.Separator(self)
+        sep.pack(fill=tk.X, **pad)
+
+        perf = ttk.Frame(self)
+        perf.pack(fill=tk.X, **pad)
+        ttk.Label(perf, text="Latency samples").grid(row=0, column=0, sticky=tk.E)
+        ttk.Entry(perf, textvariable=self.var_latency_samples, width=8).grid(row=0, column=1, sticky=tk.W)
+        ttk.Checkbutton(perf, text="Enable load test", variable=self.var_enable_load).grid(row=0, column=2, sticky=tk.W)
+        ttk.Label(perf, text="Concurrency").grid(row=0, column=3, sticky=tk.E)
+        ttk.Entry(perf, textvariable=self.var_load_concurrency, width=8).grid(row=0, column=4, sticky=tk.W)
+        ttk.Label(perf, text="Total requests").grid(row=0, column=5, sticky=tk.E)
+        ttk.Entry(perf, textvariable=self.var_load_requests, width=8).grid(row=0, column=6, sticky=tk.W)
 
         actions = ttk.Frame(self.test_frame)
         actions.pack(fill=tk.X, **pad)
@@ -228,13 +235,13 @@ class OCSPTesterGUI(tk.Tk):
         cert_frame = ttk.Frame(self.monitor_frame)
         cert_frame.pack(fill=tk.X, **pad)
         
-        ttk.Label(cert_frame, text="Certificate File:").grid(row=0, column=0, sticky=tk.E)
-        ttk.Entry(cert_frame, textvariable=self.var_good_cert, width=80).grid(row=0, column=1, sticky=tk.W)
-        ttk.Button(cert_frame, text="Browse", command=self._browse).grid(row=0, column=2)
+        ttk.Label(cert_frame, text="Issuer Certificate:").grid(row=0, column=0, sticky=tk.E)
+        ttk.Entry(cert_frame, textvariable=self.var_issuer_path, width=80).grid(row=0, column=1, sticky=tk.W)
+        ttk.Button(cert_frame, text="Browse", command=lambda: self._browse(self.var_issuer_path)).grid(row=0, column=2)
 
-        ttk.Label(cert_frame, text="Issuer Certificate:").grid(row=1, column=0, sticky=tk.E)
-        ttk.Entry(cert_frame, textvariable=self.var_issuer_path, width=80).grid(row=1, column=1, sticky=tk.W)
-        ttk.Button(cert_frame, text="Browse", command=lambda: self._browse(self.var_issuer_path)).grid(row=1, column=2)
+        ttk.Label(cert_frame, text="Certificate File:").grid(row=1, column=0, sticky=tk.E)
+        ttk.Entry(cert_frame, textvariable=self.var_good_cert, width=80).grid(row=1, column=1, sticky=tk.W)
+        ttk.Button(cert_frame, text="Browse", command=lambda: self._browse(self.var_good_cert)).grid(row=1, column=2)
 
         # URLs
         url_frame = ttk.Frame(self.monitor_frame)
@@ -260,12 +267,6 @@ class OCSPTesterGUI(tk.Tk):
         ttk.Button(control_frame, text="Run CRL Check", command=self._run_crl_monitor).pack(side=tk.LEFT, padx=5)
         ttk.Button(control_frame, text="Show Test Results", command=self._show_test_results_in_monitor).pack(side=tk.LEFT, padx=5)
         ttk.Button(control_frame, text="Clear Log", command=self._clear_monitor_log).pack(side=tk.LEFT, padx=5)
-        ttk.Button(control_frame, text="Test Log", command=self._test_log).pack(side=tk.LEFT, padx=5)
-        
-        # Test Log button on a separate row to make it more visible
-        test_frame = ttk.Frame(self.monitor_frame)
-        test_frame.pack(fill=tk.X, **pad)
-        ttk.Button(test_frame, text="🔍 Test Log (Debug)", command=self._test_log, style="Accent.TButton").pack(side=tk.LEFT, padx=5)
         
         # Log filter options
         filter_frame = ttk.Frame(self.monitor_frame)
@@ -284,8 +285,6 @@ class OCSPTesterGUI(tk.Tk):
         debug_frame.pack(fill=tk.X, **pad)
         
         ttk.Button(debug_frame, text="Enable All Debug", command=self._enable_all_debug).pack(side=tk.LEFT, padx=5)
-        ttk.Button(debug_frame, text="Disable Debug", command=self._disable_debug).pack(side=tk.LEFT, padx=5)
-        ttk.Button(debug_frame, text="Test Debug Log", command=self._test_log).pack(side=tk.LEFT, padx=5)
 
         # Summary labels
         self.ocsp_summary = tk.StringVar(value="")
@@ -614,6 +613,9 @@ class OCSPTesterGUI(tk.Tk):
             self.tree.delete(*self.tree.get_children())
             self.details.delete("1.0", tk.END)
             
+            # IMPORTANT: Store results in self.results so _on_select can access them
+            self.results = results
+            
             # Populate the tree with results
             for i, r in enumerate(results):
                 self.tree.insert("", tk.END, iid=r.id, values=(r.category, r.name, r.status.value, r.message))
@@ -648,22 +650,31 @@ class OCSPTesterGUI(tk.Tk):
             self.details.insert(tk.END, f"Name: {match.name}\n")
             self.details.insert(tk.END, f"Status: {match.status.value}\n")
             self.details.insert(tk.END, f"Message: {match.message}\n\n")
-            for k, v in match.details.items():
-                if isinstance(v, dict):
-                    self.details.insert(tk.END, f"{k}:\n")
-                    for sub_k, sub_v in v.items():
-                        if isinstance(sub_v, (list, dict)):
-                            self.details.insert(tk.END, f"  {sub_k}: {sub_v}\n")
-                        else:
-                            self.details.insert(tk.END, f"  {sub_k}: {sub_v}\n")
+            
+            # Enhanced details display for Path Validation tests
+            if "Path Validation" in match.category:
+                self.details.insert(tk.END, "=== DETAILED TEST INFORMATION ===\n\n")
+            
+            def format_details(data, indent_level=0):
+                """Recursively format nested details with proper indentation"""
+                indent = "  " * indent_level
+                for k, v in data.items():
+                    if isinstance(v, dict):
+                        self.details.insert(tk.END, f"{indent}{k}:\n")
+                        format_details(v, indent_level + 1)
+                    elif isinstance(v, list):
+                        self.details.insert(tk.END, f"{indent}{k}:\n")
+                        for item in v:
+                            if isinstance(item, dict):
+                                format_details(item, indent_level + 1)
+                            else:
+                                self.details.insert(tk.END, f"{indent}  - {item}\n")
+                    else:
+                        self.details.insert(tk.END, f"{indent}{k}: {v}\n")
+                if indent_level == 0:
                     self.details.insert(tk.END, "\n")
-                elif isinstance(v, list):
-                    self.details.insert(tk.END, f"{k}:\n")
-                    for item in v:
-                        self.details.insert(tk.END, f"  - {item}\n")
-                    self.details.insert(tk.END, "\n")
-                else:
-                    self.details.insert(tk.END, f"{k}: {v}\n")
+            
+            format_details(match.details)
 
     def _export_json(self) -> None:
         if not self.results:
@@ -792,21 +803,7 @@ class OCSPTesterGUI(tk.Tk):
         self.var_show_status.set(True)
         self._log_monitor("[DEBUG] All debug logging options enabled\n")
 
-    def _disable_debug(self) -> None:
-        """Disable debug logging"""
-        self.var_show_debug.set(False)
-        self._log_monitor("[DEBUG] Debug logging disabled\n")
 
-    def _test_log(self) -> None:
-        """Test the logging mechanism"""
-        print("DEBUG: Test Log button clicked!")
-        self._log_monitor("[INFO] Test log message - this should appear in the monitoring window\n")
-        self._log_monitor("[WARN] Test warning message\n")
-        self._log_monitor("[DEBUG] Test debug message - Federal Bridge PKI chain discovery\n")
-        self._log_monitor("[CMD] Test command message\n")
-        self._log_monitor("[STATUS] Test status message\n")
-        self._log_monitor("Plain text message without tags\n")
-        print("DEBUG: Test log messages sent!")
 
     def _select_all_test_categories(self) -> None:
         """Select all test categories"""

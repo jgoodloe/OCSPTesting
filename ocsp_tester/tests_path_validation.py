@@ -415,7 +415,27 @@ class PathValidationTestSuite:
                 name=test_name,
                 status=TestStatus.ERROR,
                 message=f"Test execution failed: {str(e)}",
-                details={"test_id": test_id, "error": str(e)}
+                details={
+                    "test_id": test_id,
+                    "error": str(e),
+                    "rfc_reference": "CRL Revoked Status",
+                    "description": "Tests detection of revoked certificates in Certificate Revocation Lists",
+                    "test_category": "Revocation Status",
+                    "severity": "High",
+                    "failure_impact": "Test execution failure - cannot verify revocation status",
+                    "troubleshooting": [
+                        "Check Python cryptography library installation",
+                        "Verify certificate file permissions",
+                        "Check CRL file availability and format",
+                        "Validate CRL signature and issuer",
+                        "Review system resources and memory"
+                    ],
+                    "revocation_info": {
+                        "purpose": "CRL validation ensures certificates are not revoked",
+                        "validation_requirements": "Must properly parse CRL and check certificate serial numbers",
+                        "security_impact": "Critical for maintaining certificate trust"
+                    }
+                }
             ))
         
         # Test 3.03: Revoked (EE) by OCSP
@@ -446,7 +466,27 @@ class PathValidationTestSuite:
                 name=test_name,
                 status=TestStatus.ERROR,
                 message=f"Test execution failed: {str(e)}",
-                details={"test_id": test_id, "error": str(e)}
+                details={
+                    "test_id": test_id,
+                    "error": str(e),
+                    "rfc_reference": "OCSP Revoked Status",
+                    "description": "Tests detection of revoked certificates via OCSP responses",
+                    "test_category": "Revocation Status",
+                    "severity": "High",
+                    "failure_impact": "Test execution failure - cannot verify OCSP revocation status",
+                    "troubleshooting": [
+                        "Check Python cryptography library installation",
+                        "Verify certificate file permissions",
+                        "Check OCSP URL connectivity and availability",
+                        "Validate OCSP response format and signature",
+                        "Review system resources and memory"
+                    ],
+                    "ocsp_revocation_info": {
+                        "purpose": "OCSP validation provides real-time certificate revocation status",
+                        "validation_requirements": "Must properly parse OCSP responses and validate signatures",
+                        "security_impact": "Critical for maintaining certificate trust with real-time revocation"
+                    }
+                }
             ))
     
     def run_constraint_extension_tests(self, test_inputs: Dict[str, Any]) -> None:
@@ -480,7 +520,27 @@ class PathValidationTestSuite:
                 name=test_name,
                 status=TestStatus.ERROR,
                 message=f"Test execution failed: {str(e)}",
-                details={"test_id": test_id, "error": str(e)}
+                details={
+                    "test_id": test_id,
+                    "error": str(e),
+                    "rfc_reference": "CA flag must be true for a CA cert",
+                    "description": "Tests validation of basic constraints in certificate chains",
+                    "test_category": "Constraints and Extensions",
+                    "severity": "High",
+                    "failure_impact": "Test execution failure - cannot verify basic constraints",
+                    "troubleshooting": [
+                        "Check Python cryptography library installation",
+                        "Verify certificate file permissions",
+                        "Check certificate format and structure",
+                        "Validate certificate extensions parsing",
+                        "Review system resources and memory"
+                    ],
+                    "constraints_info": {
+                        "purpose": "Basic constraints validate CA certificate authority",
+                        "validation_requirements": "Must properly validate CA flag and path length constraints",
+                        "security_impact": "Critical for preventing unauthorized certificate authority"
+                    }
+                }
             ))
         
         # Test 4.02: Path Length Constraint Violation
@@ -553,7 +613,27 @@ class PathValidationTestSuite:
                 name=test_name,
                 status=TestStatus.ERROR,
                 message=f"Test execution failed: {str(e)}",
-                details={"test_id": test_id, "error": str(e)}
+                details={
+                    "test_id": test_id,
+                    "error": str(e),
+                    "rfc_reference": "Policy Mapping (Sec. 4.2.4)",
+                    "description": "Tests policy mapping functionality in Federal Bridge PKI",
+                    "test_category": "Federal Bridge PKI",
+                    "severity": "High",
+                    "failure_impact": "Test execution failure - cannot verify policy mapping",
+                    "troubleshooting": [
+                        "Check Python cryptography library installation",
+                        "Verify certificate file permissions",
+                        "Check system resources and memory",
+                        "Review certificate policy extensions",
+                        "Validate certificate chain integrity"
+                    ],
+                    "policy_mapping_info": {
+                        "purpose": "Policy mapping allows CAs to map policies between different domains",
+                        "federal_bridge_role": "Essential for Federal Bridge PKI interoperability",
+                        "validation_requirements": "Must properly handle policy mappings in certificate chains"
+                    }
+                }
             ))
         
         # Test 5.02: Required Explicit Policy Violation
@@ -584,7 +664,27 @@ class PathValidationTestSuite:
                 name=test_name,
                 status=TestStatus.ERROR,
                 message=f"Test execution failed: {str(e)}",
-                details={"test_id": test_id, "error": str(e)}
+                details={
+                    "test_id": test_id,
+                    "error": str(e),
+                    "rfc_reference": "Policy Constraints (Sec. 4.2.11)",
+                    "description": "Tests explicit policy constraint validation in Federal Bridge PKI",
+                    "test_category": "Federal Bridge PKI",
+                    "severity": "High",
+                    "failure_impact": "Test execution failure - cannot verify policy constraints",
+                    "troubleshooting": [
+                        "Check Python cryptography library installation",
+                        "Verify certificate file permissions",
+                        "Check system resources and memory",
+                        "Review certificate policy constraints extensions",
+                        "Validate certificate chain integrity"
+                    ],
+                    "policy_constraints_info": {
+                        "purpose": "Policy constraints enforce explicit policy requirements in certificate chains",
+                        "federal_bridge_role": "Critical for Federal Bridge PKI policy enforcement",
+                        "validation_requirements": "Must properly validate policy constraints and inheritance"
+                    }
+                }
             ))
     
     # Helper methods for individual test implementations
