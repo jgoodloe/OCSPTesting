@@ -3,6 +3,8 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk, scrolledtext
 from typing import List
 import os
+import sys
+import io
 from datetime import datetime
 
 from ocsp_tester.runner import TestRunner, TestInputs
@@ -11,11 +13,32 @@ from ocsp_tester.config import ConfigManager, OCSPConfig
 from ocsp_tester.monitor import OCSPMonitor
 
 
+class ConsoleRedirector:
+    """Redirect stdout/stderr to a text widget"""
+    def __init__(self, text_widget):
+        self.text_widget = text_widget
+        self.original_stdout = sys.stdout
+        self.original_stderr = sys.stderr
+        
+    def write(self, text):
+        # Insert text into the widget
+        self.text_widget.insert(tk.END, text)
+        self.text_widget.see(tk.END)
+        # Also write to original stdout for debugging
+        self.original_stdout.write(text)
+        
+    def flush(self):
+        self.original_stdout.flush()
+
+
 class OCSPTesterGUI(tk.Tk):
     def __init__(self) -> None:
         super().__init__()
         self.title("OCSP Server Test Suite")
         self.geometry("1200x800")
+
+        # Create menu bar
+        self._create_menu_bar()
 
         # Initialize configuration manager
         self.config_manager = ConfigManager()
@@ -66,6 +89,19 @@ class OCSPTesterGUI(tk.Tk):
         # Ensure debug logging is enabled by default
         self.var_show_debug.set(True)
         self._log_monitor("[DEBUG] Debug logging enabled by default\n")
+        
+        # Add some initial console output to demonstrate terminal capture
+        print("=" * 60)
+        print("OCSP Server Test Suite - Console Log")
+        print("=" * 60)
+        print(f"Application started at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+        print(f"Python version: {sys.version}")
+        print(f"Working directory: {os.getcwd()}")
+        print("=" * 60)
+        print("This console log captures all stdout/stderr output")
+        print("including print statements, error messages, and")
+        print("any other terminal output from the application.")
+        print("=" * 60)
 
     def _build_ui(self) -> None:
         pad = {"padx": 6, "pady": 4}
@@ -81,9 +117,46 @@ class OCSPTesterGUI(tk.Tk):
         # Monitoring tab
         self.monitor_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.monitor_frame, text="OCSP/CRL Monitor")
+        
+        # Console Log tab
+        self.console_log_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.console_log_frame, text="Console Log")
 
         self._build_testing_ui()
         self._build_monitoring_ui()
+        self._build_console_log_ui()
+
+    def _create_menu_bar(self) -> None:
+        """Create the menu bar with File and Help menus"""
+        menubar = tk.Menu(self)
+        self.config(menu=menubar)
+        
+        # File menu
+        file_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="File", menu=file_menu)
+        
+        # Config submenu
+        config_menu = tk.Menu(file_menu, tearoff=0)
+        file_menu.add_cascade(label="Config", menu=config_menu)
+        config_menu.add_command(label="Save Config", command=self._save_config)
+        config_menu.add_command(label="Load Config", command=self._load_config)
+        
+        # Export submenu
+        export_menu = tk.Menu(file_menu, tearoff=0)
+        file_menu.add_cascade(label="Export", menu=export_menu)
+        export_menu.add_command(label="Export as JSON", command=self._export_json)
+        export_menu.add_command(label="Export as CSV", command=self._export_csv)
+        
+        # Separator
+        file_menu.add_separator()
+        
+        # Exit
+        file_menu.add_command(label="Exit", command=self.quit)
+        
+        # Help menu
+        help_menu = tk.Menu(menubar, tearoff=0)
+        menubar.add_cascade(label="Help", menu=help_menu)
+        help_menu.add_command(label="About", command=self._show_about)
 
     def _build_testing_ui(self) -> None:
         pad = {"padx": 6, "pady": 4}
@@ -180,10 +253,8 @@ class OCSPTesterGUI(tk.Tk):
         ttk.Button(select_frame, text="Select None", command=self._select_none_test_categories).pack(side=tk.LEFT, padx=5)
         ttk.Button(select_frame, text="Default Selection", command=self._select_default_test_categories).pack(side=tk.LEFT, padx=5)
 
-        sep = ttk.Separator(self)
-        sep.pack(fill=tk.X, **pad)
-
-        perf = ttk.Frame(self)
+        # Performance test configuration
+        perf = ttk.Frame(self.test_frame)
         perf.pack(fill=tk.X, **pad)
         ttk.Label(perf, text="Latency samples").grid(row=0, column=0, sticky=tk.E)
         ttk.Entry(perf, textvariable=self.var_latency_samples, width=8).grid(row=0, column=1, sticky=tk.W)
@@ -192,6 +263,9 @@ class OCSPTesterGUI(tk.Tk):
         ttk.Entry(perf, textvariable=self.var_load_concurrency, width=8).grid(row=0, column=4, sticky=tk.W)
         ttk.Label(perf, text="Total requests").grid(row=0, column=5, sticky=tk.E)
         ttk.Entry(perf, textvariable=self.var_load_requests, width=8).grid(row=0, column=6, sticky=tk.W)
+
+        sep = ttk.Separator(self.test_frame)
+        sep.pack(fill=tk.X, **pad)
 
         actions = ttk.Frame(self.test_frame)
         actions.pack(fill=tk.X, **pad)
@@ -207,14 +281,6 @@ class OCSPTesterGUI(tk.Tk):
         # Progress bar
         self.progress_bar = ttk.Progressbar(actions, mode='indeterminate')
         self.progress_bar.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-        
-        ttk.Button(actions, text="Export JSON", command=self._export_json).pack(side=tk.LEFT, padx=6)
-        ttk.Button(actions, text="Export CSV", command=self._export_csv).pack(side=tk.LEFT, padx=6)
-        ttk.Button(actions, text="Save Config", command=self._save_config).pack(side=tk.LEFT, padx=6)
-        ttk.Button(actions, text="Load Config", command=self._load_config).pack(side=tk.LEFT)
-        ttk.Button(actions, text="Test Runner", command=self._test_runner).pack(side=tk.LEFT, padx=6)
-        ttk.Button(actions, text="Quick Test", command=self._quick_test).pack(side=tk.LEFT, padx=6)
-        ttk.Button(actions, text="Path Validation", command=self._run_path_validation_tests).pack(side=tk.LEFT, padx=6)
 
         self.tree = ttk.Treeview(self.test_frame, columns=("category", "name", "status", "message"), show="headings")
         self.tree.heading("category", text="Category")
@@ -296,6 +362,24 @@ class OCSPTesterGUI(tk.Tk):
         # Output log
         self.monitor_output = scrolledtext.ScrolledText(self.monitor_frame, height=25)
         self.monitor_output.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+
+    def _build_console_log_ui(self) -> None:
+        """Build the console log UI"""
+        pad = {"padx": 6, "pady": 4}
+        
+        # Console log output - captures actual terminal output
+        self.console_log_output = scrolledtext.ScrolledText(self.console_log_frame, height=30)
+        self.console_log_output.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        
+        # Add a note at the top
+        info_label = ttk.Label(self.console_log_frame, text="Console Log - Captures actual terminal/console output (stdout/stderr)", 
+                              font=("Arial", 10, "italic"), foreground="gray")
+        info_label.pack(pady=5)
+        
+        # Set up stdout/stderr redirection
+        self.console_redirector = ConsoleRedirector(self.console_log_output)
+        sys.stdout = self.console_redirector
+        sys.stderr = self.console_redirector
 
     def _browse(self, var: tk.StringVar) -> None:
         path = filedialog.askopenfilename(filetypes=[("Certificates", "*.pem *.cer *.crt *.der"), ("All files", "*.*")])
@@ -483,159 +567,9 @@ class OCSPTesterGUI(tk.Tk):
             self.run_tests_btn.config(state='normal', text='Run Tests')
             self.progress_bar.stop()
 
-    def _test_runner(self) -> None:
-        """Test the runner with minimal inputs to verify it's working"""
-        try:
-            self.progress_var.set("Testing runner...")
-            self.progress_bar.start()
-            
-            # Create minimal test inputs
-            from ocsp_tester.runner import TestInputs
-            test_inputs = TestInputs(
-                ocsp_url="http://ocsp.xca.xpki.com/ocsp",
-                issuer_path="",  # Empty to trigger validation
-                known_good_cert_path=None,
-                known_revoked_cert_path=None,
-                unknown_ca_cert_path=None,
-                client_sign_cert_path=None,
-                client_sign_key_path=None,
-                latency_samples=1,
-                enable_load_test=False,
-                load_concurrency=1,
-                load_requests=1,
-                crl_override_url=None
-            )
-            
-            # Test if runner can be instantiated
-            from ocsp_tester.runner import TestRunner
-            runner = TestRunner()
-            
-            self.progress_var.set("Runner test successful")
-            messagebox.showinfo("Test Runner", "Test runner is working correctly!")
-            
-        except Exception as exc:
-            self.progress_var.set("Runner test failed")
-            messagebox.showerror("Test Runner Error", f"Test runner failed: {str(exc)}")
-        finally:
-            self.progress_bar.stop()
-            self.progress_var.set("Ready")
+    
 
-    def _quick_test(self) -> None:
-        """Run a quick test without certificates to check if the issue is with certificate loading"""
-        try:
-            self.progress_var.set("Running quick test...")
-            self.progress_bar.start()
-            self._log_monitor(f"[INFO] Starting quick test at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            
-            # Test just the basic test runner without certificates
-            from ocsp_tester.runner import TestRunner, TestInputs
-            
-            # Create test inputs with minimal data
-            test_inputs = TestInputs(
-                ocsp_url="http://ocsp.xca.xpki.com/ocsp",
-                issuer_path="",  # Empty to trigger validation
-                known_good_cert_path=None,
-                known_revoked_cert_path=None,
-                unknown_ca_cert_path=None,
-                client_sign_cert_path=None,
-                client_sign_key_path=None,
-                latency_samples=1,
-                enable_load_test=False,
-                load_concurrency=1,
-                load_requests=1,
-                crl_override_url=None
-            )
-            
-            self._log_monitor("[INFO] Created test inputs\n")
-            
-            # Test runner instantiation
-            runner = TestRunner()
-            self._log_monitor("[INFO] TestRunner instantiated\n")
-            
-            # This should fail quickly due to missing issuer path
-            try:
-                results = runner.run_all(test_inputs)
-                self._log_monitor(f"[INFO] Quick test completed - {len(results)} results\n")
-                messagebox.showinfo("Quick Test", f"Quick test completed with {len(results)} results!")
-            except Exception as e:
-                self._log_monitor(f"[INFO] Quick test failed as expected: {str(e)}\n")
-                messagebox.showinfo("Quick Test", f"Quick test failed as expected (missing certificates): {str(e)}")
-            
-        except Exception as exc:
-            self._log_monitor(f"[ERROR] Quick test failed: {str(exc)}\n")
-            messagebox.showerror("Quick Test Error", f"Quick test failed: {str(exc)}")
-        finally:
-            self.progress_bar.stop()
-            self.progress_var.set("Ready")
-
-    def _run_path_validation_tests(self) -> None:
-        """Run certificate path validation tests"""
-        try:
-            self.progress_var.set("Running path validation tests...")
-            self.progress_bar.start()
-            self._log_monitor(f"[INFO] Starting path validation tests at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
-            
-            # Check if we have the required certificates
-            issuer_path = self.var_issuer_path.get().strip()
-            good_cert_path = self.var_good_cert.get().strip()
-            
-            if not issuer_path:
-                messagebox.showerror("Input Error", "Issuer certificate path is required for path validation tests.")
-                return
-                
-            if not good_cert_path:
-                messagebox.showerror("Input Error", "Good certificate path is required for path validation tests.")
-                return
-            
-            # Import path validation tests
-            from ocsp_tester.tests_path_validation import run_path_validation_tests
-            
-            # Prepare test inputs
-            test_inputs = {
-                'ocsp_url': self.var_ocsp_url.get().strip(),
-                'issuer_path': issuer_path,
-                'good_cert_path': good_cert_path,
-                'revoked_cert_path': self.var_revoked_cert.get().strip() or None,
-                'unknown_ca_cert_path': self.var_unknown_ca_cert.get().strip() or None,
-                'crl_override_url': self.var_crl_override_url.get().strip() or None,
-                'client_cert_path': self.var_client_cert.get().strip() or None,
-                'client_key_path': self.var_client_key.get().strip() or None
-            }
-            
-            self._log_monitor("[INFO] Running certificate path validation tests...\n")
-            
-            # Run path validation tests with log callback
-            results = run_path_validation_tests(test_inputs, log_callback=self._log_monitor)
-            
-            self._log_monitor(f"[INFO] Path validation tests completed - {len(results)} results\n")
-            
-            # Clear previous results and populate with path validation results
-            self.tree.delete(*self.tree.get_children())
-            self.details.delete("1.0", tk.END)
-            
-            # IMPORTANT: Store results in self.results so _on_select can access them
-            self.results = results
-            
-            # Populate the tree with results
-            for i, r in enumerate(results):
-                self.tree.insert("", tk.END, iid=r.id, values=(r.category, r.name, r.status.value, r.message))
-            
-            # Show summary
-            pass_count = sum(1 for r in results if r.status.value == "PASS")
-            fail_count = sum(1 for r in results if r.status.value == "FAIL")
-            error_count = sum(1 for r in results if r.status.value == "ERROR")
-            
-            summary = f"Path Validation Tests Complete: {pass_count} PASS, {fail_count} FAIL, {error_count} ERROR"
-            self._log_monitor(f"[INFO] {summary}\n")
-            
-            messagebox.showinfo("Path Validation Tests", f"Path validation tests completed!\n\n{summary}")
-            
-        except Exception as exc:
-            self._log_monitor(f"[ERROR] Path validation tests failed: {str(exc)}\n")
-            messagebox.showerror("Path Validation Error", f"Path validation tests failed: {str(exc)}")
-        finally:
-            self.progress_bar.stop()
-            self.progress_var.set("Ready")
+   
 
     def _on_select(self, _event=None) -> None:
         sel = self.tree.selection()
@@ -695,6 +629,26 @@ class OCSPTesterGUI(tk.Tk):
             return
         export_results_csv(self.results, path)
         messagebox.showinfo("Export", f"Saved to {path}")
+
+    def _show_about(self) -> None:
+        """Show about dialog"""
+        about_text = """OCSP Server Test Suite
+        
+A comprehensive testing application for OCSP (Online Certificate Status Protocol) servers with both GUI and monitoring capabilities.
+
+Features:
+• Comprehensive OCSP Testing
+• CRL Monitoring  
+• Certificate Validation
+• Export Capabilities (JSON/CSV)
+• Advanced Testing Options
+
+Version: 2.1.0
+License: MIT License
+
+Copyright (c) 2025 OCSP Testing Tool"""
+        
+        messagebox.showinfo("About OCSP Server Test Suite", about_text)
 
     def _save_config(self) -> None:
         """Save current configuration to file"""
@@ -785,13 +739,18 @@ class OCSPTesterGUI(tk.Tk):
            ("[STATUS]" in text and not self.var_show_status.get()):
             return
         
+        # Write to monitoring output
         self.monitor_output.insert(tk.END, text)
         if self.var_follow_log.get():
             self.monitor_output.see(tk.END)
+        
+        # Also print to stdout so it appears in console log
+        print(text, end='')
 
     def _clear_monitor_log(self) -> None:
         """Clear monitoring log"""
         self.monitor_output.delete(1.0, tk.END)
+        self.console_log_output.delete(1.0, tk.END)
 
     def _enable_all_debug(self) -> None:
         """Enable all debug logging options"""
