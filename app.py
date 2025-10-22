@@ -21,14 +21,26 @@ class ConsoleRedirector:
         self.original_stderr = sys.stderr
         
     def write(self, text):
-        # Insert text into the widget
-        self.text_widget.insert(tk.END, text)
-        self.text_widget.see(tk.END)
-        # Also write to original stdout for debugging
-        self.original_stdout.write(text)
+        try:
+            # Insert text into the widget
+            self.text_widget.insert(tk.END, text)
+            self.text_widget.see(tk.END)
+            # Also write to original stdout for debugging
+            self.original_stdout.write(text)
+        except Exception:
+            # If GUI is not available, just write to original stdout
+            self.original_stdout.write(text)
         
     def flush(self):
-        self.original_stdout.flush()
+        try:
+            self.original_stdout.flush()
+        except Exception:
+            pass
+            
+    def restore(self):
+        """Restore original stdout/stderr"""
+        sys.stdout = self.original_stdout
+        sys.stderr = self.original_stderr
 
 
 class OCSPTesterGUI(tk.Tk):
@@ -91,6 +103,7 @@ class OCSPTesterGUI(tk.Tk):
         self._log_monitor("[DEBUG] Debug logging enabled by default\n")
         
         # Add some initial console output to demonstrate terminal capture
+        # This will be captured by the Console Log tab
         print("=" * 60)
         print("OCSP Server Test Suite - Console Log")
         print("=" * 60)
@@ -102,6 +115,20 @@ class OCSPTesterGUI(tk.Tk):
         print("including print statements, error messages, and")
         print("any other terminal output from the application.")
         print("=" * 60)
+        
+        # Set up cleanup when window is closed
+        self.protocol("WM_DELETE_WINDOW", self._on_closing)
+
+    def _on_closing(self):
+        """Handle window closing"""
+        if hasattr(self, 'console_redirector'):
+            self.console_redirector.restore()
+        self.destroy()
+
+    def __del__(self):
+        """Cleanup when GUI is destroyed"""
+        if hasattr(self, 'console_redirector'):
+            self.console_redirector.restore()
 
     def _build_ui(self) -> None:
         pad = {"padx": 6, "pady": 4}
@@ -376,8 +403,11 @@ class OCSPTesterGUI(tk.Tk):
                               font=("Arial", 10, "italic"), foreground="gray")
         info_label.pack(pady=5)
         
-        # Set up stdout/stderr redirection
+        # Set up stdout/stderr redirection after GUI is built
         self.console_redirector = ConsoleRedirector(self.console_log_output)
+        # Store original stdout/stderr for restoration if needed
+        self.original_stdout = sys.stdout
+        self.original_stderr = sys.stderr
         sys.stdout = self.console_redirector
         sys.stderr = self.console_redirector
 
