@@ -88,6 +88,13 @@ class OCSPTesterGUI(tk.Tk):
         self.var_trust_anchor_type = tk.StringVar(value=self.config.trust_anchor_type)
         self.var_require_explicit_policy = tk.BooleanVar(value=self.config.require_explicit_policy)
         self.var_inhibit_policy_mapping = tk.BooleanVar(value=self.config.inhibit_policy_mapping)
+        
+        # Advanced testing options
+        self.var_test_cryptographic_preferences = tk.BooleanVar(value=self.config.test_cryptographic_preferences)
+        self.var_test_non_issued_certificates = tk.BooleanVar(value=self.config.test_non_issued_certificates)
+        
+        # OCSP response validation settings
+        self.var_max_age_hours = tk.IntVar(value=self.config.max_age_hours)
 
         self.runner = TestRunner()
         self.results = []
@@ -96,7 +103,11 @@ class OCSPTesterGUI(tk.Tk):
         self._build_ui()
         
         # Initialize monitor after UI is built
-        self.monitor = OCSPMonitor(log_callback=self._log_monitor)
+        self.monitor = OCSPMonitor(log_callback=self._log_monitor, config=self.config)
+        
+        # Configure advanced testing options from config
+        self.monitor.test_cryptographic_preferences = self.config.test_cryptographic_preferences
+        self.monitor.test_non_issued_certificates = self.config.test_non_issued_certificates
         
         # Ensure debug logging is enabled by default
         self.var_show_debug.set(True)
@@ -250,6 +261,24 @@ class OCSPTesterGUI(tk.Tk):
         
         ttk.Checkbutton(options_frame, text="Require explicit policy", variable=self.var_require_explicit_policy).pack(side=tk.LEFT, padx=5)
         ttk.Checkbutton(options_frame, text="Inhibit policy mapping", variable=self.var_inhibit_policy_mapping).pack(side=tk.LEFT, padx=5)
+        
+        # Advanced testing options
+        ttk.Label(trust_anchor_frame, text="Advanced Testing:").grid(row=2, column=0, sticky=tk.W, **pad)
+        advanced_frame = ttk.Frame(trust_anchor_frame)
+        advanced_frame.grid(row=2, column=1, sticky=tk.W)
+        
+        ttk.Checkbutton(advanced_frame, text="Cryptographic Preferences", variable=self.var_test_cryptographic_preferences).pack(side=tk.LEFT, padx=5)
+        ttk.Checkbutton(advanced_frame, text="Non-Issued Certificates", variable=self.var_test_non_issued_certificates).pack(side=tk.LEFT, padx=5)
+        
+        # OCSP response validation settings
+        ttk.Label(trust_anchor_frame, text="OCSP Response Validation:").grid(row=3, column=0, sticky=tk.W, **pad)
+        validation_frame = ttk.Frame(trust_anchor_frame)
+        validation_frame.grid(row=3, column=1, sticky=tk.W)
+        
+        ttk.Label(validation_frame, text="Max Age (hours):").pack(side=tk.LEFT, padx=5)
+        max_age_spinbox = ttk.Spinbox(validation_frame, from_=1, to=168, width=5, textvariable=self.var_max_age_hours)
+        max_age_spinbox.pack(side=tk.LEFT, padx=5)
+        ttk.Label(validation_frame, text="(1-168 hours, default: 24)").pack(side=tk.LEFT, padx=5)
 
         # Test category selection checkboxes (right side)
         test_categories_frame = ttk.LabelFrame(combined_frame, text="Test Categories", padding=5)
@@ -310,11 +339,15 @@ class OCSPTesterGUI(tk.Tk):
         self.progress_bar.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
 
         self.tree = ttk.Treeview(self.test_frame, columns=("category", "name", "status", "message"), show="headings")
-        self.tree.heading("category", text="Category")
-        self.tree.heading("name", text="Test")
-        self.tree.heading("status", text="Status")
-        self.tree.heading("message", text="Message")
+        self.tree.heading("category", text="Category", command=lambda: self._sort_tree("category"))
+        self.tree.heading("name", text="Test", command=lambda: self._sort_tree("name"))
+        self.tree.heading("status", text="Status", command=lambda: self._sort_tree("status"))
+        self.tree.heading("message", text="Message", command=lambda: self._sort_tree("message"))
         self.tree.pack(fill=tk.BOTH, expand=True, **pad)
+        
+        # Initialize sorting state
+        self.tree_sort_column = None
+        self.tree_sort_reverse = False
 
         self.details = tk.Text(self.test_frame, height=10)
         self.details.pack(fill=tk.BOTH, expand=False, **pad)
@@ -417,6 +450,11 @@ class OCSPTesterGUI(tk.Tk):
             var.set(path)
 
     def _collect_inputs(self) -> TestInputs:
+        # Update config with current checkbox values before creating TestInputs
+        self.config.test_cryptographic_preferences = bool(self.var_test_cryptographic_preferences.get())
+        self.config.test_non_issued_certificates = bool(self.var_test_non_issued_certificates.get())
+        self.config.max_age_hours = int(self.var_max_age_hours.get())
+        
         return TestInputs(
             ocsp_url=self.var_ocsp_url.get().strip(),
             issuer_path=self.var_issuer_path.get().strip(),
@@ -434,6 +472,7 @@ class OCSPTesterGUI(tk.Tk):
             trust_anchor_type=self.var_trust_anchor_type.get(),
             require_explicit_policy=bool(self.var_require_explicit_policy.get()),
             inhibit_policy_mapping=bool(self.var_inhibit_policy_mapping.get()),
+            config=self.config
         )
 
     def _run_tests(self) -> None:
@@ -640,6 +679,56 @@ class OCSPTesterGUI(tk.Tk):
             
             format_details(match.details)
 
+    def _sort_tree(self, column: str) -> None:
+        """Sort the tree by the specified column"""
+        # Determine if we're sorting the same column (toggle reverse) or a new column
+        if self.tree_sort_column == column:
+            self.tree_sort_reverse = not self.tree_sort_reverse
+        else:
+            self.tree_sort_column = column
+            self.tree_sort_reverse = False
+        
+        # Get all items from the tree
+        items = []
+        for item in self.tree.get_children():
+            values = self.tree.item(item)['values']
+            items.append((item, values))
+        
+        # Define column mapping for sorting
+        column_map = {
+            "category": 0,
+            "name": 1, 
+            "status": 2,
+            "message": 3
+        }
+        
+        # Sort the items
+        col_index = column_map.get(column, 0)
+        
+        # Custom sorting for status column (PASS, FAIL, WARN, SKIP, ERROR)
+        if column == "status":
+            status_order = {"PASS": 0, "FAIL": 1, "WARN": 2, "SKIP": 3, "ERROR": 4}
+            items.sort(key=lambda x: status_order.get(x[1][col_index], 5), reverse=self.tree_sort_reverse)
+        else:
+            # Regular string sorting for other columns
+            items.sort(key=lambda x: x[1][col_index].lower() if x[1][col_index] else "", reverse=self.tree_sort_reverse)
+        
+        # Clear the tree and re-insert sorted items
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        
+        for item_id, values in items:
+            self.tree.insert("", tk.END, iid=item_id, values=values)
+        
+        # Update column headers to show sort direction
+        for col in ["category", "name", "status", "message"]:
+            if col == column:
+                arrow = " ↓" if self.tree_sort_reverse else " ↑"
+                self.tree.heading(col, text=self.tree.heading(col)['text'].replace(" ↑", "").replace(" ↓", "") + arrow)
+            else:
+                # Remove arrows from other columns
+                self.tree.heading(col, text=self.tree.heading(col)['text'].replace(" ↑", "").replace(" ↓", ""))
+
     def _export_json(self) -> None:
         if not self.results:
             messagebox.showinfo("Export", "No results to export yet.")
@@ -713,6 +802,13 @@ Copyright (c) 2025 OCSP Testing Tool"""
             self.config.require_explicit_policy = bool(self.var_require_explicit_policy.get())
             self.config.inhibit_policy_mapping = bool(self.var_inhibit_policy_mapping.get())
             
+            # Update advanced testing settings
+            self.config.test_cryptographic_preferences = bool(self.var_test_cryptographic_preferences.get())
+            self.config.test_non_issued_certificates = bool(self.var_test_non_issued_certificates.get())
+            
+            # Update OCSP response validation settings
+            self.config.max_age_hours = int(self.var_max_age_hours.get())
+            
             if self.config_manager.save_config(self.config):
                 messagebox.showinfo("Config", "Configuration saved successfully!")
             else:
@@ -754,6 +850,13 @@ Copyright (c) 2025 OCSP Testing Tool"""
             self.var_trust_anchor_type.set(self.config.trust_anchor_type)
             self.var_require_explicit_policy.set(self.config.require_explicit_policy)
             self.var_inhibit_policy_mapping.set(self.config.inhibit_policy_mapping)
+            
+            # Update advanced testing variables
+            self.var_test_cryptographic_preferences.set(self.config.test_cryptographic_preferences)
+            self.var_test_non_issued_certificates.set(self.config.test_non_issued_certificates)
+            
+            # Update OCSP response validation variables
+            self.var_max_age_hours.set(self.config.max_age_hours)
             
             messagebox.showinfo("Config", "Configuration loaded successfully!")
         except Exception as exc:

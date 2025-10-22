@@ -35,6 +35,13 @@ class OCSPConfig:
     trust_anchor_type: str = "root"
     require_explicit_policy: bool = False
     inhibit_policy_mapping: bool = False
+    
+    # Advanced testing options
+    test_cryptographic_preferences: bool = True  # Enable cryptographic preference negotiation testing
+    test_non_issued_certificates: bool = True    # Enable non-issued certificate testing
+    
+    # OCSP response validation settings
+    max_age_hours: int = 24  # Maximum age in hours for OCSP response thisUpdate field
 
 
 class ConfigManager:

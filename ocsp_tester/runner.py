@@ -1,7 +1,7 @@
 import os
 import uuid
 from dataclasses import dataclass
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
@@ -35,6 +35,7 @@ class TestInputs:
     trust_anchor_type: str = "root"
     require_explicit_policy: bool = False
     inhibit_policy_mapping: bool = False
+    config: Optional[Any] = None
 
 
 def _load_cert(path: str) -> x509.Certificate:
@@ -165,7 +166,7 @@ class TestRunner:
         if not test_categories or test_categories.get('ocsp_tests', True):
             self._log("[DEBUG] Starting OCSP security tests...\n")
             try:
-                security_results = run_security_tests(inputs.ocsp_url, issuer, good or sample, inputs.client_sign_cert_path, inputs.client_sign_key_path)
+                security_results = run_security_tests(inputs.ocsp_url, issuer, good or sample, inputs.client_sign_cert_path, inputs.client_sign_key_path, inputs.config)
                 self._log(f"[DEBUG] OCSP security tests completed - {len(security_results)} results\n")
                 results.extend(security_results)
             except Exception as exc:

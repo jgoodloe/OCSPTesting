@@ -1,12 +1,13 @@
 import os
 import uuid
-from typing import List, Optional
+from typing import List, Optional, Any
 
 from cryptography import x509
 from cryptography.hazmat.primitives import serialization
 from .models import TestCaseResult, TestStatus
 from .ocsp_client import send_ocsp_request, OCSPRequestSpec
 from cryptography.hazmat.primitives import hashes
+from .monitor import OCSPMonitor
 
 
 def run_security_tests(
@@ -15,6 +16,7 @@ def run_security_tests(
     good_cert: Optional[x509.Certificate],
     client_sign_cert: Optional[str],
     client_sign_key: Optional[str],
+    config: Optional[Any] = None,
 ) -> List[TestCaseResult]:
     results: List[TestCaseResult] = []
 
@@ -74,7 +76,7 @@ def run_security_tests(
     r = TestCaseResult(id=str(uuid.uuid4()), category="Security", name="Operational error signaling", status=TestStatus.PASS)
     try:
         from .monitor import OCSPMonitor
-        monitor = OCSPMonitor()
+        monitor = OCSPMonitor(config=config)
         
         # Test operational error signaling
         issuer_path = "/tmp/test_issuer.pem"
@@ -120,7 +122,7 @@ def run_security_tests(
     r = TestCaseResult(id=str(uuid.uuid4()), category="Security", name="Unauthorized query handling", status=TestStatus.PASS)
     try:
         from .monitor import OCSPMonitor
-        monitor = OCSPMonitor()
+        monitor = OCSPMonitor(config=config)
         
         # Test unauthorized query handling
         issuer_path = "/tmp/test_issuer.pem"
@@ -159,7 +161,7 @@ def run_security_tests(
     r = TestCaseResult(id=str(uuid.uuid4()), category="Security", name="sigRequired when unsigned", status=TestStatus.PASS)
     try:
         from .monitor import OCSPMonitor
-        monitor = OCSPMonitor()
+        monitor = OCSPMonitor(config=config)
         
         # Test sigRequired validation
         issuer_path = "/tmp/test_issuer.pem"
@@ -205,7 +207,7 @@ def run_security_tests(
     r = TestCaseResult(id=str(uuid.uuid4()), category="Security", name="Nonce echo in response", status=TestStatus.PASS)
     try:
         from .monitor import OCSPMonitor
-        monitor = OCSPMonitor()
+        monitor = OCSPMonitor(config=config)
         
         # Test nonce echo validation
         issuer_path = "/tmp/test_issuer.pem"
@@ -375,5 +377,122 @@ def run_security_tests(
         })
     r.end()
     results.append(r)
+
+    # 7. Cryptographic preference negotiation test
+    r = TestCaseResult(id=str(uuid.uuid4()), category="Security", name="Cryptographic preference negotiation", status=TestStatus.ERROR)
+    
+    # Check if cryptographic preference testing is enabled
+    test_enabled = True
+    if config and hasattr(config, 'test_cryptographic_preferences'):
+        test_enabled = config.test_cryptographic_preferences
+    
+    if not test_enabled:
+        r.status = TestStatus.SKIP
+        r.message = "Cryptographic preference testing is disabled"
+        r.details.update({
+            "test_disabled": True,
+            "reason": "Configuration setting test_cryptographic_preferences is False"
+        })
+        r.end()
+        results.append(r)
+    else:
+        try:
+            # Create a temporary issuer file for the monitor
+            import tempfile
+            with tempfile.NamedTemporaryFile(mode='wb', suffix='.pem', delete=False) as f:
+                issuer_pem = issuer.public_bytes(serialization.Encoding.PEM)
+                f.write(issuer_pem)
+                issuer_path = f.name
+            
+            try:
+                # Initialize monitor with a dummy log callback
+                monitor = OCSPMonitor(log_callback=lambda x: None, config=config)
+                
+                # Run cryptographic preference test
+                crypto_results = monitor.run_cryptographic_preference_test(issuer_path, ocsp_url)
+                
+                # Determine test status based on security assessment
+                security_assessment = crypto_results.get("security_assessment", "UNKNOWN")
+                negotiation_successful = crypto_results.get("negotiation_successful", False)
+                downgrade_detected = crypto_results.get("downgrade_detected", False)
+                
+                if security_assessment == "SECURE":
+                    r.status = TestStatus.PASS
+                    r.message = f"Strong cryptographic algorithms supported: {len(crypto_results.get('supported_algorithms', []))} algorithms"
+                elif security_assessment == "ACCEPTABLE":
+                    r.status = TestStatus.PASS
+                    r.message = f"Acceptable cryptographic algorithms supported: {len(crypto_results.get('supported_algorithms', []))} algorithms"
+                elif security_assessment == "WEAK":
+                    r.status = TestStatus.FAIL
+                    r.message = "Only weak cryptographic algorithms supported"
+                elif security_assessment == "CRITICAL":
+                    r.status = TestStatus.FAIL
+                    r.message = "No supported cryptographic algorithms found"
+                else:
+                    r.status = TestStatus.FAIL
+                    r.message = f"Unknown security assessment: {security_assessment}"
+                
+                # Add detailed results
+                r.details.update({
+                    "analysis": {
+                        "test_description": [
+                            "This test validates OCSP server cryptographic capabilities and detects potential downgrade attacks.",
+                            "It checks:",
+                            "1. Support for various signature algorithms (SHA-512, SHA-384, SHA-256 with RSA/ECDSA)",
+                            "2. Detection of potential downgrade attacks",
+                            "3. Server uses acceptable cryptographic strength",
+                            "4. Algorithm preference negotiation works correctly"
+                        ],
+                        "ocsp_url": ocsp_url,
+                        "issuer_certificate": str(issuer.subject),
+                        "test_method": "Cryptographic preference negotiation"
+                    },
+                    "negotiation_results": {
+                        "negotiation_successful": negotiation_successful,
+                        "security_assessment": security_assessment,
+                        "downgrade_detected": downgrade_detected,
+                        "supported_algorithms": crypto_results.get("supported_algorithms", []),
+                        "preferred_algorithms": crypto_results.get("preferred_algorithms", []),
+                        "algorithm_tests": crypto_results.get("algorithm_tests", []),
+                        "security_warnings": crypto_results.get("security_warnings", []),
+                        "recommendations": crypto_results.get("recommendations", [])
+                    },
+                    "test_result": {
+                        "negotiation_successful": negotiation_successful,
+                        "security_assessment": security_assessment,
+                        "downgrade_detected": downgrade_detected,
+                        "overall_result": r.status.value
+                    },
+                    "troubleshooting": {
+                        "if_weak_algorithms": "OCSP server may need cryptographic algorithm upgrades",
+                        "if_downgrade_detected": "Potential security vulnerability - server may be vulnerable to downgrade attacks",
+                        "if_no_support": "OCSP server may not support modern cryptographic algorithms",
+                        "if_negotiation_fails": "OCSP server may not properly handle algorithm preference negotiation",
+                        "next_steps": "Verify OCSP server cryptographic capabilities, consider upgrading to stronger algorithms"
+                    }
+                })
+                
+            finally:
+                # Clean up temporary file
+                try:
+                    os.unlink(issuer_path)
+                except:
+                    pass
+        
+        except Exception as exc:
+            r.status = TestStatus.ERROR
+            r.message = f"Cryptographic preference test failed: {exc}"
+            r.details.update({
+                "error_type": type(exc).__name__,
+                "error_details": str(exc),
+                "troubleshooting": {
+                    "network_issue": "Check OCSP URL accessibility and network connectivity",
+                    "certificate_issue": "Verify issuer certificate file is valid",
+                    "monitor_issue": "OCSPMonitor may not be properly initialized"
+                }
+            })
+        
+        r.end()
+        results.append(r)
 
     return results

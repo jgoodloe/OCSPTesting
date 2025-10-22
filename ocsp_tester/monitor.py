@@ -16,9 +16,23 @@ class OCSPMonitor:
     
     VERSION = "2.1.0"  # Enhanced P7C processing version
     
-    def __init__(self, log_callback: Optional[Callable[[str], None]] = None):
+    def __init__(self, log_callback: Optional[Callable[[str], None]] = None, config: Optional[Any] = None):
         self.log_callback = log_callback or print
         self.check_validity = True
+        
+        # Advanced testing options
+        self.test_cryptographic_preferences = True  # Default value
+        self.test_non_issued_certificates = True    # Default value
+        if config and hasattr(config, 'test_cryptographic_preferences'):
+            self.test_cryptographic_preferences = config.test_cryptographic_preferences
+        if config and hasattr(config, 'test_non_issued_certificates'):
+            self.test_non_issued_certificates = config.test_non_issued_certificates
+        
+        # OCSP response validation settings
+        self.max_age_hours = 24  # Default value
+        if config and hasattr(config, 'max_age_hours'):
+            self.max_age_hours = config.max_age_hours
+        
         self.log(f"[INFO] OCSPMonitor v{self.VERSION} initialized\n")
         
     def log(self, text: str) -> None:
@@ -177,7 +191,7 @@ class OCSPMonitor:
             validity_interval_results = {"is_valid": False, "compliance_issues": ["No valid OCSP response to validate"]}
             if stdout and result.returncode == 0:
                 try:
-                    validity_interval_results = self.validate_response_validity_interval(stdout)
+                    validity_interval_results = self.validate_response_validity_interval(stdout, self.max_age_hours)
                 except Exception as e:
                     self.log(f"[VALIDITY] Error during validity interval validation: {str(e)}\n")
                     validity_interval_results = {"is_valid": False, "compliance_issues": [f"Validation error: {str(e)}"]}
@@ -209,10 +223,10 @@ class OCSPMonitor:
                 results["cert_status"] = "UNKNOWN"
             
             # Add parsing errors and warnings to summary
-            if certificate_status_details["parsing_errors"]:
+            if certificate_status_details.get("parsing_errors"):
                 summary += f"[ERROR] Parsing errors: {', '.join(certificate_status_details['parsing_errors'])}\n"
             
-            if certificate_status_details["security_warnings"]:
+            if certificate_status_details.get("security_warnings"):
                 for warning in certificate_status_details["security_warnings"]:
                     summary += f"[WARN] {warning}\n"
             
@@ -301,7 +315,7 @@ class OCSPMonitor:
                     summary += f"[WARN] {warning}\n"
                 
                 # Add recommendations
-                for recommendation in crypto_negotiation_results["security_recommendations"]:
+                for recommendation in crypto_negotiation_results["recommendations"]:
                     summary += f"[RECOMMENDATION] {recommendation}\n"
 
             # thisUpdate and nextUpdate - handle different formats
@@ -1064,21 +1078,21 @@ class OCSPMonitor:
 
     def negotiate_cryptographic_preferences(self, issuer_path: str, ocsp_url: str, preferred_algorithms: List[str] = None) -> Dict[str, Any]:
         """
-        Negotiate cryptographic preferences with OCSP server to prevent downgrade attacks
+        Analyze OCSP server cryptographic capabilities by examining response signature algorithms
         
-        This method implements cryptographic preference negotiation by:
-        1. Sending OCSP requests with Preferred Signature Algorithms extension
-        2. Testing server support for various signature algorithms
-        3. Detecting potential downgrade attacks
-        4. Validating that server uses acceptable cryptographic strength
+        This method analyzes the OCSP server's cryptographic capabilities by:
+        1. Sending OCSP requests and analyzing response signature algorithms
+        2. Detecting what algorithms the server actually uses
+        3. Assessing cryptographic strength based on observed algorithms
+        4. Providing security recommendations
         
         Args:
             issuer_path: Path to the issuing CA certificate
             ocsp_url: OCSP server URL
-            preferred_algorithms: List of preferred signature algorithms (default: strong algorithms)
+            preferred_algorithms: List of preferred signature algorithms (for reference)
             
         Returns:
-            Dict containing cryptographic negotiation results and security assessment
+            Dict containing cryptographic analysis results and security assessment
         """
         negotiation_results = {
             "negotiation_successful": False,
@@ -1092,9 +1106,9 @@ class OCSPMonitor:
         }
         
         try:
-            self.log("[CRYPTO] Starting cryptographic preference negotiation...\n")
+            self.log("[CRYPTO] Starting cryptographic capability analysis...\n")
             
-            # Define preferred algorithms (strongest first)
+            # Define preferred algorithms (strongest first) for reference
             if preferred_algorithms is None:
                 preferred_algorithms = [
                     "sha512WithRSAEncryption",      # SHA-512 with RSA (strongest)
@@ -1110,48 +1124,46 @@ class OCSPMonitor:
             
             negotiation_results["preferred_algorithms"] = preferred_algorithms
             
-            # Test each algorithm preference
-            for i, algorithm in enumerate(preferred_algorithms):
-                self.log(f"[CRYPTO] Testing algorithm preference {i+1}/{len(preferred_algorithms)}: {algorithm}\n")
-                
-                algorithm_test = self._test_algorithm_preference(algorithm, issuer_path, ocsp_url)
-                negotiation_results["algorithm_tests"].append(algorithm_test)
-                
-                if algorithm_test["supported"]:
-                    negotiation_results["supported_algorithms"].append(algorithm)
-                    self.log(f"[CRYPTO] [OK] Algorithm {algorithm} is supported\n")
-                else:
-                    self.log(f"[CRYPTO] [FAIL] Algorithm {algorithm} is not supported\n")
+            # Send a single OCSP request to analyze server's algorithm choice
+            self.log("[CRYPTO] Analyzing OCSP server cryptographic capabilities...\n")
             
-            # Analyze results for downgrade attacks
-            downgrade_analysis = self._analyze_cryptographic_downgrade(negotiation_results)
-            negotiation_results.update(downgrade_analysis)
+            algorithm_test = self._test_algorithm_preference("analysis", issuer_path, ocsp_url)
+            negotiation_results["algorithm_tests"].append(algorithm_test)
             
-            # Determine overall security assessment
-            if negotiation_results["supported_algorithms"]:
-                strongest_supported = negotiation_results["supported_algorithms"][0]
-                if strongest_supported in ["sha512WithRSAEncryption", "sha384WithRSAEncryption", "ecdsa-with-SHA512", "ecdsa-with-SHA384"]:
+            # Analyze the response to determine server capabilities
+            if algorithm_test["response_received"] and algorithm_test["signature_algorithm_used"]:
+                signature_algorithm = algorithm_test["signature_algorithm_used"]
+                negotiation_results["supported_algorithms"] = [signature_algorithm]
+                
+                # Determine security assessment based on observed algorithm
+                if any(strong in signature_algorithm.lower() for strong in ["sha512", "sha384"]):
                     negotiation_results["security_assessment"] = "SECURE"
-                    self.log("[CRYPTO] [OK] Strong cryptographic algorithms supported\n")
-                elif strongest_supported in ["sha256WithRSAEncryption", "ecdsa-with-SHA256", "sha256WithRSA-PSS"]:
+                    negotiation_results["recommendations"].append("Server uses strong cryptographic algorithms")
+                    self.log(f"[CRYPTO] [OK] Strong algorithm detected: {signature_algorithm}\n")
+                elif "sha256" in signature_algorithm.lower():
                     negotiation_results["security_assessment"] = "ACCEPTABLE"
-                    self.log("[CRYPTO] [WARN] Acceptable cryptographic algorithms supported\n")
+                    negotiation_results["recommendations"].append("Server uses acceptable cryptographic algorithms")
+                    self.log(f"[CRYPTO] [OK] Acceptable algorithm detected: {signature_algorithm}\n")
+                elif "sha1" in signature_algorithm.lower():
+                    negotiation_results["security_assessment"] = "WEAK"
+                    negotiation_results["security_warnings"].append("Server uses deprecated SHA-1 algorithm")
+                    self.log(f"[CRYPTO] [WARN] Weak algorithm detected: {signature_algorithm}\n")
                 else:
                     negotiation_results["security_assessment"] = "WEAK"
-                    negotiation_results["security_warnings"].append("Only weak cryptographic algorithms supported")
-                    self.log("[CRYPTO] [FAIL] Only weak cryptographic algorithms supported\n")
+                    negotiation_results["security_warnings"].append(f"Unknown or weak algorithm: {signature_algorithm}")
+                    self.log(f"[CRYPTO] [WARN] Unknown algorithm: {signature_algorithm}\n")
                 
                 negotiation_results["negotiation_successful"] = True
             else:
                 negotiation_results["security_assessment"] = "CRITICAL"
-                negotiation_results["security_warnings"].append("No supported cryptographic algorithms found")
-                self.log("[CRYPTO] [FAIL] No supported cryptographic algorithms found\n")
+                negotiation_results["security_warnings"].append("Could not determine server cryptographic capabilities")
+                self.log("[CRYPTO] [FAIL] Could not analyze server cryptographic capabilities\n")
             
             return negotiation_results
             
         except Exception as e:
-            self.log(f"[CRYPTO] Cryptographic negotiation exception: {e}\n")
-            negotiation_results["security_warnings"].append(f"Negotiation failed: {str(e)}")
+            self.log(f"[CRYPTO] Cryptographic analysis exception: {e}\n")
+            negotiation_results["security_warnings"].append(f"Analysis failed: {str(e)}")
             return negotiation_results
 
     def _test_algorithm_preference(self, algorithm: str, issuer_path: str, ocsp_url: str) -> Dict[str, Any]:
@@ -1176,12 +1188,9 @@ class OCSPMonitor:
         }
         
         try:
-            # Create a test certificate for this algorithm test
-            test_cert_path = self._create_test_certificate_for_algorithm_test(issuer_path)
-            
-            if not test_cert_path:
-                test_result["test_errors"].append("Failed to create test certificate")
-                return test_result
+            # Use issuer certificate as test certificate for algorithm testing
+            # This is a simplified approach - we'll test what algorithm the server uses
+            test_cert_path = issuer_path
             
             # Send OCSP request (OpenSSL will negotiate the algorithm)
             ocsp_cmd = [
@@ -1231,12 +1240,7 @@ class OCSPMonitor:
                 test_result["test_errors"].append(f"OCSP request failed: {result.stderr}")
                 self.log(f"[CRYPTO] [FAIL] OCSP request failed: {result.stderr}\n")
             
-            # Cleanup
-            try:
-                os.remove(test_cert_path)
-            except:
-                pass
-            
+            # No cleanup needed since we're using existing certificate
             return test_result
             
         except Exception as e:
@@ -1257,7 +1261,7 @@ class OCSPMonitor:
         downgrade_analysis = {
             "downgrade_detected": False,
             "downgrade_indicators": [],
-            "security_recommendations": []
+            "recommendations": []
         }
         
         try:
@@ -1276,7 +1280,7 @@ class OCSPMonitor:
             if weak_supported and not strong_supported:
                 downgrade_analysis["downgrade_detected"] = True
                 downgrade_analysis["downgrade_indicators"].append("Only weak algorithms supported when stronger ones should be available")
-                downgrade_analysis["security_recommendations"].append("CRITICAL: Potential downgrade attack - reject weak algorithms")
+                downgrade_analysis["recommendations"].append("CRITICAL: Potential downgrade attack - reject weak algorithms")
                 self.log("[CRYPTO] [FAIL] Potential downgrade attack detected - only weak algorithms supported\n")
             
             # Check algorithm ordering (should prefer stronger algorithms)
@@ -1287,14 +1291,14 @@ class OCSPMonitor:
                 if first_supported in weak_algorithms and last_supported in strong_algorithms:
                     downgrade_analysis["downgrade_detected"] = True
                     downgrade_analysis["downgrade_indicators"].append("Weak algorithms preferred over strong ones")
-                    downgrade_analysis["security_recommendations"].append("Reject responses using weak algorithms")
+                    downgrade_analysis["recommendations"].append("Reject responses using weak algorithms")
                     self.log("[CRYPTO] [FAIL] Downgrade detected - weak algorithms preferred\n")
             
             # Check for SHA-1 usage (deprecated)
             sha1_used = any("sha1" in algo.lower() for algo in supported_algorithms)
             if sha1_used:
                 downgrade_analysis["downgrade_indicators"].append("SHA-1 algorithm detected (deprecated)")
-                downgrade_analysis["security_recommendations"].append("Avoid SHA-1 due to collision vulnerabilities")
+                downgrade_analysis["recommendations"].append("Avoid SHA-1 due to collision vulnerabilities")
                 self.log("[CRYPTO] [WARN] SHA-1 algorithm detected (deprecated)\n")
             
             # Check for MD5 usage (extremely weak)
@@ -1302,7 +1306,7 @@ class OCSPMonitor:
             if md5_used:
                 downgrade_analysis["downgrade_detected"] = True
                 downgrade_analysis["downgrade_indicators"].append("MD5 algorithm detected (extremely weak)")
-                downgrade_analysis["security_recommendations"].append("CRITICAL: Reject MD5 - extremely vulnerable")
+                downgrade_analysis["recommendations"].append("CRITICAL: Reject MD5 - extremely vulnerable")
                 self.log("[CRYPTO] [FAIL] MD5 algorithm detected (extremely weak)\n")
             
             if not downgrade_analysis["downgrade_detected"]:
@@ -2586,9 +2590,9 @@ ggEPADCCAQoCggEBAL{str(uuid4().hex)[:20]}...
                     summary += f"- {warning}\n"
             
             # Add recommendations
-            if negotiation_results["security_recommendations"]:
+            if negotiation_results["recommendations"]:
                 summary += "\nSecurity Recommendations:\n"
-                for recommendation in negotiation_results["security_recommendations"]:
+                for recommendation in negotiation_results["recommendations"]:
                     summary += f"- {recommendation}\n"
             
             # Determine overall result
@@ -2603,7 +2607,7 @@ ggEPADCCAQoCggEBAL{str(uuid4().hex)[:20]}...
                 "supported_algorithms": supported_algorithms,
                 "negotiation_successful": negotiation_results["negotiation_successful"],
                 "test_details": negotiation_results,
-                "recommendations": negotiation_results["security_recommendations"]
+                "recommendations": negotiation_results["recommendations"]
             }
             
         except Exception as e:
