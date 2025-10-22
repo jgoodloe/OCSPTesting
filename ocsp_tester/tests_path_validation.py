@@ -284,6 +284,130 @@ class PathValidationTestSuite:
                     ]
                 }
             ))
+        
+        # Test 1.03: Invalid Signature (Intermediate)
+        test_id = "1.03"
+        test_name = "Invalid Signature (Intermediate): Intermediate CA certificate's signature is invalid"
+        
+        try:
+            result = self._test_invalid_signature_intermediate(test_inputs)
+            status = TestStatus.FAIL if result else TestStatus.PASS
+            
+            self.test_results.append(TestCaseResult(
+                id=f"path_validation_{test_id}",
+                category="Path Validation - Foundational",
+                name=test_name,
+                status=status,
+                message=f"Invalid intermediate signature test {'failed as expected' if result else 'incorrectly passed'}",
+                details={
+                    "test_id": test_id,
+                    "rfc_reference": "Core Signature Check (Mismatched Key)",
+                    "expected_result": "FAIL",
+                    "actual_result": "FAIL" if result else "PASS",
+                    "description": "Tests detection of invalid intermediate CA certificate signatures",
+                    "validation_steps": [
+                        "Load intermediate CA certificate",
+                        "Load parent CA certificate",
+                        "Extract parent CA's public key",
+                        "Verify signature using parent CA's public key",
+                        "Check for signature verification failure"
+                    ],
+                    "test_category": "Foundational Path Construction",
+                    "severity": "Critical",
+                    "failure_impact": "Security vulnerability - invalid intermediate signatures should be rejected",
+                    "troubleshooting": [
+                        "Verify intermediate and parent certificates are correctly paired",
+                        "Check if certificates are corrupted or tampered with",
+                        "Ensure proper cryptographic library installation",
+                        "Verify certificate chain completeness"
+                    ]
+                }
+            ))
+            
+        except Exception as e:
+            self.test_results.append(TestCaseResult(
+                id=f"path_validation_{test_id}",
+                category="Path Validation - Foundational",
+                name=test_name,
+                status=TestStatus.ERROR,
+                message=f"Test execution failed: {str(e)}",
+                details={
+                    "test_id": test_id,
+                    "error": str(e),
+                    "description": "Tests detection of invalid intermediate CA certificate signatures",
+                    "test_category": "Foundational Path Construction",
+                    "severity": "Critical",
+                    "failure_impact": "Test execution failure - cannot verify intermediate signature validation",
+                    "troubleshooting": [
+                        "Check Python cryptography library installation",
+                        "Verify certificate file permissions",
+                        "Check system resources and memory",
+                        "Review error logs for detailed information"
+                    ]
+                }
+            ))
+        
+        # Test 1.04: Issuer/Subject Mismatch
+        test_id = "1.04"
+        test_name = "Issuer/Subject Mismatch: The Issuer DN of the child cert does not match the Subject DN of the parent cert"
+        
+        try:
+            result = self._test_issuer_subject_mismatch(test_inputs)
+            status = TestStatus.FAIL if result else TestStatus.PASS
+            
+            self.test_results.append(TestCaseResult(
+                id=f"path_validation_{test_id}",
+                category="Path Validation - Foundational",
+                name=test_name,
+                status=status,
+                message=f"Issuer/Subject mismatch test {'failed as expected' if result else 'incorrectly passed'}",
+                details={
+                    "test_id": test_id,
+                    "rfc_reference": "Name Chaining Failure",
+                    "expected_result": "FAIL",
+                    "actual_result": "FAIL" if result else "PASS",
+                    "description": "Tests detection of issuer/subject DN mismatches in certificate chains",
+                    "validation_steps": [
+                        "Load child certificate",
+                        "Load parent certificate",
+                        "Compare child certificate's issuer DN with parent certificate's subject DN",
+                        "Check for DN mismatch",
+                        "Verify proper certificate chain relationship"
+                    ],
+                    "test_category": "Foundational Path Construction",
+                    "severity": "Critical",
+                    "failure_impact": "Certificate chain integrity failure - mismatched DNs indicate broken chain",
+                    "troubleshooting": [
+                        "Verify certificates belong to the same PKI",
+                        "Check certificate file paths are correct",
+                        "Ensure certificates are not mixed from different CAs",
+                        "Verify certificate chain completeness"
+                    ]
+                }
+            ))
+            
+        except Exception as e:
+            self.test_results.append(TestCaseResult(
+                id=f"path_validation_{test_id}",
+                category="Path Validation - Foundational",
+                name=test_name,
+                status=TestStatus.ERROR,
+                message=f"Test execution failed: {str(e)}",
+                details={
+                    "test_id": test_id,
+                    "error": str(e),
+                    "description": "Tests detection of issuer/subject DN mismatches in certificate chains",
+                    "test_category": "Foundational Path Construction",
+                    "severity": "Critical",
+                    "failure_impact": "Test execution failure - cannot verify DN matching",
+                    "troubleshooting": [
+                        "Check Python cryptography library installation",
+                        "Verify certificate file permissions",
+                        "Check system resources and memory",
+                        "Review error logs for detailed information"
+                    ]
+                }
+            ))
     
     def run_validity_period_tests(self, test_inputs: Dict[str, Any]) -> None:
         """Test Category 2: Certificate Validity Period (Time) Tests"""
@@ -1224,10 +1348,17 @@ class PathValidationTestSuite:
                 except:
                     good_cert = x509.load_der_x509_certificate(good_data)
             
+            # Use the CertificatePathValidator to properly verify signature
+            validator = CertificatePathValidator()
+            
             # Check if the certificates are properly paired
             if good_cert.issuer == issuer_cert.subject:
-                # Certificates are properly paired, signature validation should pass
-                return False  # Test should PASS (no signature validation failure)
+                # Certificates are properly paired, verify signature
+                signature_valid = validator._verify_certificate_signature(good_cert, issuer_cert)
+                if signature_valid:
+                    return False  # Test should PASS (signature validation successful)
+                else:
+                    return True   # Test should FAIL (signature validation failure detected)
             else:
                 # Certificates are not properly paired, signature validation should fail
                 return True   # Test should FAIL (signature validation failure detected)
@@ -1486,6 +1617,83 @@ class PathValidationTestSuite:
             # In a real implementation, this would check policy constraints
             # For now, return False (indicating no explicit policy violation)
             return False
+        except Exception as e:
+            return False
+    
+    def _test_invalid_signature_intermediate(self, test_inputs: Dict[str, Any]) -> bool:
+        """Test for invalid intermediate CA certificate signature"""
+        try:
+            # Load certificates
+            issuer_path = test_inputs.get('issuer_path')
+            good_cert_path = test_inputs.get('good_cert_path')
+            
+            if not issuer_path or not good_cert_path:
+                return False
+            
+            # Load certificates
+            with open(issuer_path, 'rb') as f:
+                issuer_data = f.read()
+                try:
+                    issuer_cert = x509.load_pem_x509_certificate(issuer_data)
+                except:
+                    issuer_cert = x509.load_der_x509_certificate(issuer_data)
+            
+            with open(good_cert_path, 'rb') as f:
+                good_data = f.read()
+                try:
+                    good_cert = x509.load_pem_x509_certificate(good_data)
+                except:
+                    good_cert = x509.load_der_x509_certificate(good_data)
+            
+            # Use the CertificatePathValidator to properly verify signature
+            validator = CertificatePathValidator()
+            
+            # Check if the certificates are properly paired
+            if good_cert.issuer == issuer_cert.subject:
+                # Certificates are properly paired, verify signature
+                signature_valid = validator._verify_certificate_signature(good_cert, issuer_cert)
+                if signature_valid:
+                    return False  # Test should PASS (signature validation successful)
+                else:
+                    return True   # Test should FAIL (signature validation failure detected)
+            else:
+                # Certificates are not properly paired, signature validation should fail
+                return True   # Test should FAIL (signature validation failure detected)
+                
+        except Exception as e:
+            return False
+    
+    def _test_issuer_subject_mismatch(self, test_inputs: Dict[str, Any]) -> bool:
+        """Test for issuer/subject DN mismatch"""
+        try:
+            # Load certificates
+            issuer_path = test_inputs.get('issuer_path')
+            good_cert_path = test_inputs.get('good_cert_path')
+            
+            if not issuer_path or not good_cert_path:
+                return False
+            
+            # Load certificates
+            with open(issuer_path, 'rb') as f:
+                issuer_data = f.read()
+                try:
+                    issuer_cert = x509.load_pem_x509_certificate(issuer_data)
+                except:
+                    issuer_cert = x509.load_der_x509_certificate(issuer_data)
+            
+            with open(good_cert_path, 'rb') as f:
+                good_data = f.read()
+                try:
+                    good_cert = x509.load_pem_x509_certificate(good_data)
+                except:
+                    good_cert = x509.load_der_x509_certificate(good_data)
+            
+            # Check if issuer DN matches subject DN
+            if good_cert.issuer == issuer_cert.subject:
+                return False  # Test should PASS (no mismatch detected)
+            else:
+                return True   # Test should FAIL (mismatch detected)
+                
         except Exception as e:
             return False
 

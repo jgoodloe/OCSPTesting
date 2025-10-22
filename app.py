@@ -844,7 +844,7 @@ Copyright (c) 2025 OCSP Testing Tool"""
             self._log_monitor("-" * 40 + "\n")
             
             for result in results:
-                status_icon = "[PASS]" if result.status.value == "PASS" else "[FAIL]" if result.status.value == "FAIL" else "[WARN]" if result.status.value == "WARN" else "[SKIP]" if result.status.value == "SKIP" else "[ERROR]"
+                status_icon = "✅" if result.status.value == "PASS" else "❌" if result.status.value == "FAIL" else "⚠️" if result.status.value == "WARN" else "⏭️" if result.status.value == "SKIP" else "🔍" if result.status.value == "INFO" else "❌"
                 self._log_monitor(f"{status_icon} {result.name}\n")
                 self._log_monitor(f"   Status: {result.status.value}\n")
                 self._log_monitor(f"   Message: {result.message}\n")
