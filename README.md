@@ -2,9 +2,11 @@
 
 A comprehensive testing application for OCSP (Online Certificate Status Protocol) servers with both GUI and monitoring capabilities. This tool runs structured tests against OCSP servers and provides detailed reporting with exportable results (JSON/CSV).
 
-## Screenshot
+## Screenshots
 
-![OCSP Testing GUI](assets/Screenshot%202025-10-20%20192117.png)
+![OCSP Testing GUI - Main Interface](assets/Screenshot%202025-10-22%20125739.png)
+
+![OCSP Testing GUI - Monitoring Tab](assets/Screenshot%202025-10-22%20125817.png)
 
 ## Features
 
