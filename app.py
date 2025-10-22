@@ -137,20 +137,20 @@ class OCSPTesterGUI(tk.Tk):
         self.notebook = ttk.Notebook(self)
         self.notebook.pack(fill=tk.BOTH, expand=True, **pad)
 
-        # Testing tab
-        self.test_frame = ttk.Frame(self.notebook)
-        self.notebook.add(self.test_frame, text="OCSP Testing")
-        
-        # Monitoring tab
+        # Monitoring tab (now first)
         self.monitor_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.monitor_frame, text="OCSP/CRL Monitor")
+        
+        # Testing tab (now second)
+        self.test_frame = ttk.Frame(self.notebook)
+        self.notebook.add(self.test_frame, text="Conformance Testing")
         
         # Console Log tab
         self.console_log_frame = ttk.Frame(self.notebook)
         self.notebook.add(self.console_log_frame, text="Console Log")
 
-        self._build_testing_ui()
         self._build_monitoring_ui()
+        self._build_testing_ui()
         self._build_console_log_ui()
 
     def _create_menu_bar(self) -> None:

@@ -10,7 +10,7 @@
   "enable_load_test": true,
   "load_concurrency": 5,
   "load_requests": 50,
-  "crl_override_url": "xx",
+  "crl_override_url": "",
   "check_validity": true,
   "follow_log": true,
   "show_info": true,
