@@ -1,9 +1,9 @@
 {
   "ocsp_url": "http://ocsp.xca.xpki.com/ocsp",
-  "issuer_path": "C:/ocsptesting/OCSPTesting/jasonocsptestissuer.cer",
-  "good_cert": "C:/ocsptesting/OCSPTesting/jasonocsptest.cer",
+  "issuer_path": "C:/ocsptesting/OCSPTesting/assets/jasonocsptestissuer.cer",
+  "good_cert": "C:/ocsptesting/OCSPTesting/assets/jasonocsptest.cer",
   "revoked_cert": "",
-  "unknown_ca_cert": "C:/Users/jcgoo/Downloads/timdhsca4.cer",
+  "unknown_ca_cert": "C:/ocsptesting/OCSPTesting/assets/timdhsca4.cer",
   "client_cert": "",
   "client_key": "",
   "latency_samples": 5,
@@ -19,7 +19,7 @@
   "show_stderr": true,
   "show_status": true,
   "show_debug": true,
-  "trust_anchor_path": "C:/Users/jcgoo/Downloads/FedBridge.cer",
+  "trust_anchor_path": "C:/ocsptesting/OCSPTesting/assets/FedBridge.cer",
   "trust_anchor_type": "bridge",
   "require_explicit_policy": true,
   "inhibit_policy_mapping": true
