@@ -1002,6 +1002,7 @@ Copyright (c) 2025 OCSP Testing Tool"""
         # Update monitor settings
         self.monitor.check_validity = self.var_check_validity.get()
         
+        # If no OCSP URL provided, it will be extracted from the certificate's AIA extension
         threading.Thread(target=self._ocsp_monitor_thread, args=(cert, issuer, url), daemon=True).start()
 
     def _run_crl_monitor(self) -> None:

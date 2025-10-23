@@ -1,0 +1,4 @@
+{
+  "error": "[ERROR] OCSP Signature Verification Exception: 'charmap' codec can't encode character '\\u274c' in position 0: character maps to <undefined>",
+  "overall_result": "FAILED"
+}

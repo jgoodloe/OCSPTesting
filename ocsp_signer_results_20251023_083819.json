@@ -1,0 +1,39 @@
+{
+  "certificate_path": "sample_cert.pem",
+  "issuer_path": "sample_ca.pem",
+  "ocsp_url": "http://ocsp.pki.goog/gts1o1core",
+  "timestamp": "2025-10-23T08:38:19.384990",
+  "return_code": 1,
+  "signer_information": {
+    "responder_id": null,
+    "responder_id_type": null,
+    "signature_algorithm": null,
+    "signature_value": null,
+    "signature_verified": false,
+    "signer_certificate": null,
+    "signer_subject": null,
+    "signer_issuer": null,
+    "signer_serial": null,
+    "signer_validity": null
+  },
+  "certificate_status": {
+    "status": "UNKNOWN",
+    "serial_number": "358BA8A225EA839DA1FF2B66541EE7781E684509",
+    "revocation_time": null,
+    "revocation_reason": null
+  },
+  "response_timestamps": {
+    "this_update": null,
+    "next_update": null,
+    "produced_at": null
+  },
+  "signature_information": {
+    "signature_verified": false,
+    "verification_method": "failed",
+    "verification_errors": [],
+    "signature_algorithm": null,
+    "signature_value": null
+  },
+  "raw_stdout": "OCSP Request Data:\n    Version: 1 (0x0)\n    Requestor List:\n        Certificate ID:\n          Hash Algorithm: sha1\n          Issuer Name Hash: 42E03EC2544D31A033312B8A7C11536498750B09\n          Issuer Key Hash: AF6FCCCEF6A2A1C0284FE2E3DD079F020F4F2312\n          Serial Number: 358BA8A225EA839DA1FF2B66541EE7781E684509\n    Request Extensions:\n        OCSP Nonce: \n            0410855F5F68511F1A447ABFA61ACD577953\nResponder Error: unauthorized (6)\n",
+  "raw_stderr": ""
+}

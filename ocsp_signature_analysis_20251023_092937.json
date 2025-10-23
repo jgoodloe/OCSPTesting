@@ -1,0 +1,94 @@
+{
+  "timestamp": "2025-10-23T09:29:37.076052",
+  "certificate_path": "C:/Users/jcgoo/Downloads/GARYCIS.pem",
+  "issuer_path": "C:/Users/jcgoo/Downloads/GARYCISDHSCA4.cer",
+  "ocsp_url": "http://ocsp.dimc.dhs.gov",
+  "verification_analysis": {
+    "ocsp_response": {
+      "status": "successful (0x0)",
+      "type": "Basic OCSP Response",
+      "responder_id": "65C1B77B4415E5D37F844739A727D6AD32B53D59",
+      "produced_at": "Oct 23 10:08:35 2025 GMT",
+      "certificate_status": "good",
+      "this_update": "Oct 23 10:00:05 2025 GMT",
+      "next_update": "Oct 24 10:08:35 2025 GMT",
+      "signature_algorithm": "sha256WithRSAEncryption"
+    }
+  },
+  "responder_certificate_analysis": {
+    "pem_data": "-----BEGIN CERTIFICATE-----\nMIIHZzCCBU+gAwIBAgIEYntIszANBgkqhkiG9w0BAQsFADCBhzELMAkGA1UEBhMC\nVVMxGDAWBgNVBAoTD1UuUy4gR292ZXJubWVudDEoMCYGA1UECxMfRGVwYXJ0bWVu\ndCBvZiBIb21lbGFuZCBTZWN1cml0eTEiMCAGA1UECxMZQ2VydGlmaWNhdGlvbiBB\ndXRob3JpdGllczEQMA4GA1UECxMHREhTIENBNDAeFw0yNTA5MTYxNTIxNTJaFw0y\nNjAxMDEwNDU5MDBaMIGmMQswCQYDVQQGEwJVUzEYMBYGA1UEChMPVS5TLiBHb3Zl\ncm5tZW50MSgwJgYDVQQLEx9EZXBhcnRtZW50IG9mIEhvbWVsYW5kIFNlY3VyaXR5\nMSIwIAYDVQQLExlDZXJ0aWZpY2F0aW9uIEF1dGhvcml0aWVzMRAwDgYDVQQLEwdE\nSFMgQ0E0MR0wGwYDVQQDExRPQ1NQIFNpZ25lciA2MzM0NTYxNjCCASIwDQYJKoZI\nhvcNAQEBBQADggEPADCCAQoCggEBAMSarmsMniMnkjl2+vk6W5l6kfStVLIwA5px\nz5MLLUO9zbNcQr2fGiU9rwlLG3lLgvk6bZQDkf1VTzFSNDI53J7Xe3v32xVCqqBU\nYZwyFwZMzU/dFe9Gz7BQiu25peesD5+nwehg2tZbEHRfy2WMnVzdXRCyqEvTB1tx\nBMnQBNL3XvZbQQiwWWUPXJogvXRWs7JDQ5E2rp14RyfMnS4w9oLfxfQDc4yGdla7\nqT/Ox4fLgoVhqKM/0QUcTvuMQefRg+pOANi3O8H0+D21fxkimDOsmglWr0JsGmYd\nQ2+kbhoCkhvu10wn+Pxd0jc8E875Ei6ulzaR3tYYjOda0T6QKOsCAwEAAaOCArgw\nggK0MA4GA1UdDwEB/wQEAwIHgDCB6wYDVR0gBIHjMIHgMAwGCmCGSAFlAwIBAwYw\nDAYKYIZIAWUDAgEDBzAMBgpghkgBZQMCAQMIMAwGCmCGSAFlAwIBAw0wDAYKYIZI\nAWUDAgEDEDAMBgpghkgBZQMCAQMRMAwGCmCGSAFlAwIBAyQwDAYKYIZIAWUDAgED\nJzAMBgpghkgBZQMCAQMoMAwGCmCGSAFlAwIBAykwDAYKYIZIAWUDAgEDLTAMBgpg\nhkgBZQMCAQMuMAwGCmCGSAFlAwIBAy8wDAYKYIZIAWUDAgEFCjAMBgpghkgBZQMC\nAQULMAwGCmCGSAFlAwIBBQwwgfMGCCsGAQUFBwEBBIHmMIHjMDQGCCsGAQUFBzAC\nhihodHRwOi8vcGtpLmRpbWMuZGhzLmdvdi9kaHNjYV9lZV9haWEucDdjMIGqBggr\nBgEFBQcwAoaBnWxkYXA6Ly9sZGFwMDEuZGltYy5kaHMuZ292L291PURIUyUyMENB\nNCxvdT1DZXJ0aWZpY2F0aW9uJTIwQXV0aG9yaXRpZXMsb3U9RGVwYXJ0bWVudCUy\nMG9mJTIwSG9tZWxhbmQlMjBTZWN1cml0eSxvPVUuUy4lMjBHb3Zlcm5tZW50LGM9\nVVM/Y0FDZXJ0aWZpY2F0ZTtiaW5hcnkwEwYDVR0lBAwwCgYIKwYBBQUHAwkwDwYJ\nKwYBBQUHMAEFBAIFADA8BgNVHREENTAzghRPQ1NQIFNpZ25lciA2MzM0NTYxNoEb\ncGtpX29wc0BmaXNjYWwudHJlYXN1cnkuZ292MB8GA1UdIwQYMBaAFBguICGzyVeF\niCfninWE83PGd+MJMB0GA1UdDgQWBBRlwbd7RBXl03+ERzmnJ9atMrU9WTAaBgkq\nhkiG9n0HQQAEDTALGwVWMTAuMAMCBDAwDQYJKoZIhvcNAQELBQADggIBAK+cJhkY\n9GS4lfhKjALbbSxRdsHyqaAcvLtYT/ZKZjuukTAMV/zIOafrfxSiewLr/aMwAXrA\nF5qltHK0wEOU1DBZE61jnukUnFotJCFFMWE4hVlKg7K9LuxMlHjLgXp/vfPSEec3\n7hSB+w7WmxUObobRh4g/AfDjzcFyhRhnHUHEjkW7k2wbP5bs2xCyGHixJLxRG+UT\nvp8yVr7m7bexFZj114iYnnJD58fPmk6OSGYLpDopg8S097Sv4gtV4BLBzZG+KEE0\n3QKgEVUMgntzVq4BOG+fQPQKECdNXutMEcYK22aEuHW1MGdLYsJwsI2rEGUi/ImY\na4M0GVssH72MA0WBoPDVK/sCq6EzaV2s47yEt/4wz1r5PEEn7O+EA9lsBUth2uBi\nbDTFI/3zD9vzZ9emXrYdoulzrM2v7lWnk53c71J9zZxqhU/CeEJJZsn83+cMWfGB\nD0HfTjUdqj9J8Z9EthEQsDXuwXoHmLMiYWXNAvdI3RdBGEXc0+roAmz0sH5CTwM7\nZpQogsPaoJgXdE/6M5DIotgMwsfANa+ocg53EenPeWRjzWu0vfyS7Q8vFcuHgldT\njpLMRpXVCM9NhdSq+JgO0uGYwknODRv7PJisvLcS6SsQCS+VIKDFhOLcXuapdhw5\nZ+VUF9abwvUWtmlL6eeOpVDxLopL8qDNt+3A\n-----END CERTIFICATE-----",
+    "subject": null,
+    "issuer": null,
+    "serial_number": "1652246707 (0x627b48b3)",
+    "signature_algorithm": null,
+    "extensions": {},
+    "certificate_valid": false,
+    "trust_chain_analysis": {
+      "trust_chain_valid": false,
+      "error_details": "C=US, O=U.S. Government, OU=Department of Homeland Security, OU=Certification Authorities, OU=DHS CA4\nerror 2 at 1 depth lookup: unable to get issuer certificate\nerror C:\\Users\\jcgoo\\AppData\\Local\\Temp\\tmppwta24wr.pem: verification failed",
+      "recommendations": [
+        "Add the OCSP responder's issuer certificate to the trust store",
+        "Ensure the certificate chain is complete"
+      ]
+    },
+    "validity_analysis": {
+      "validity_period_valid": false,
+      "not_before": null,
+      "not_after": null,
+      "current_time": null,
+      "days_until_expiry": 0,
+      "error_details": "Validity period not found in certificate"
+    },
+    "key_usage_analysis": {
+      "key_usage_valid": false,
+      "key_usage": "",
+      "has_digital_signature": false,
+      "error_details": "Digital Signature not present in Key Usage extension"
+    },
+    "extended_key_usage_analysis": {
+      "extended_key_usage_valid": false,
+      "extended_key_usage": "",
+      "has_ocsp_signing": false,
+      "required_oid": "1.3.6.1.5.5.7.3.9",
+      "error_details": "OCSP Signing not present in Extended Key Usage extension"
+    },
+    "authority_analysis": {
+      "authority_valid": false,
+      "responder_subject": null,
+      "responder_issuer": null,
+      "ocsp_no_check": false,
+      "error_details": "Missing subject or issuer information"
+    },
+    "issues": [
+      "One or more certificate validation checks failed"
+    ],
+    "recommendations": []
+  },
+  "signature_analysis": {
+    "signature_verification_valid": false,
+    "verification_method": "",
+    "error_details": "WARNING: no nonce in response\nResponse Verify Failure\nD83A0000:error:13800065:OCSP routines:ocsp_verify_signer:certificate verify error:crypto\\ocsp\\ocsp_vfy.c:64:Verify error: unable to get local issuer certificate\nD83A0000:error:13800065:OCSP routines:ocsp_verify_signer:certificate verify error:crypto\\ocsp\\ocsp_vfy.c:64:Verify error: unable to get local issuer certificate",
+    "recommendations": [
+      "The OCSP responder certificate is not in the local trust store",
+      "Add the OCSP responder's issuer certificate to the trust store"
+    ]
+  },
+  "recommendations": [
+    "Add the OCSP responder's issuer certificate to the trust store",
+    "Ensure the certificate chain is complete",
+    "The OCSP responder certificate is not in the local trust store",
+    "Add the OCSP responder's issuer certificate to the trust store",
+    "Consider implementing proper certificate chain management",
+    "Ensure OCSP responder certificates are properly configured"
+  ],
+  "security_assessment": {
+    "security_level": "LOW",
+    "risks": [
+      "OCSP signature verification failed - potential security risk"
+    ],
+    "mitigations": [
+      "Do not trust OCSP response without proper verification"
+    ],
+    "overall_assessment": "OCSP signature verification failed"
+  }
+}

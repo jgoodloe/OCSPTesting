@@ -1,7 +1,7 @@
 {
-  "ocsp_url": "http://ocsp.xca.xpki.com/ocsp",
-  "issuer_path": "C:/ocsptesting/OCSPTesting/assets/jasonocsptestissuer.cer",
-  "good_cert": "C:/ocsptesting/OCSPTesting/assets/jasonocsptest.cer",
+  "ocsp_url": "http://ocsp.dimc.dhs.gov",
+  "issuer_path": "C:/Users/jcgoo/Downloads/GARYCISDHSCA4.cer",
+  "good_cert": "C:/Users/jcgoo/Downloads/GARYCIS.pem",
   "revoked_cert": "",
   "unknown_ca_cert": "C:/ocsptesting/OCSPTesting/assets/timdhsca4.cer",
   "client_cert": "",
@@ -22,5 +22,8 @@
   "trust_anchor_path": "C:/ocsptesting/OCSPTesting/assets/FedBridge.cer",
   "trust_anchor_type": "bridge",
   "require_explicit_policy": true,
-  "inhibit_policy_mapping": true
+  "inhibit_policy_mapping": true,
+  "test_cryptographic_preferences": false,
+  "test_non_issued_certificates": false,
+  "max_age_hours": 24
 }
