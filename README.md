@@ -21,7 +21,111 @@ A comprehensive testing application for OCSP (Online Certificate Status Protocol
 
 ### External Software Dependencies
 
-#### 1. OpenSSL
+#### 1. Git
+**Required Version**: Git 2.0+ (for cloning the repository)
+**Purpose**: Version control and repository cloning
+
+**Installation Instructions:**
+
+**Windows:**
+```bash
+# Option 1: Download installer (recommended)
+# Download from: https://git-scm.com/download/win
+# Run the installer and follow the setup wizard
+
+# Option 2: Using Chocolatey
+choco install git
+
+# Option 3: Using Scoop
+scoop install git
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt update
+sudo apt install git
+```
+
+**Linux (CentOS/RHEL/Fedora):**
+```bash
+# CentOS/RHEL
+sudo yum install git
+
+# Fedora
+sudo dnf install git
+```
+
+**macOS:**
+```bash
+# Using Homebrew
+brew install git
+
+# Or download from: https://git-scm.com/download/mac
+```
+
+**Verification:**
+```bash
+git --version
+# Should show Git 2.0.0 or higher
+```
+
+#### 2. Python and pip
+**Required Version**: Python 3.10+ (tested with Python 3.13)
+**Purpose**: Runtime environment and package management
+
+**Installation Instructions:**
+
+**Windows:**
+```bash
+# Download from: https://www.python.org/downloads/
+# Ensure "Add Python to PATH" is checked during installation
+# pip comes included with Python installation
+
+# Verify pip installation
+python -m pip --version
+```
+
+**Linux (Ubuntu/Debian):**
+```bash
+sudo apt update
+sudo apt install python3.10 python3.10-pip python3.10-venv
+
+# Alternative: Install latest Python
+sudo apt install python3 python3-pip python3-venv
+```
+
+**Linux (CentOS/RHEL/Fedora):**
+```bash
+# CentOS/RHEL
+sudo yum install python3.10 python3.10-pip
+
+# Fedora
+sudo dnf install python3 python3-pip
+
+# If pip is not available, install it manually
+curl https://bootstrap.pypa.io/get-pip.py -o get-pip.py
+python3 get-pip.py
+```
+
+**macOS:**
+```bash
+# Using Homebrew
+brew install python@3.10
+# pip comes included with Python
+
+# Or download from: https://www.python.org/downloads/
+```
+
+**Verification:**
+```bash
+python --version
+# Should show Python 3.10.0 or higher
+
+pip --version
+# Should show pip version information
+```
+
+#### 3. OpenSSL
 **Required Version**: OpenSSL 1.1.1+ or OpenSSL 3.0+
 **Purpose**: Used extensively for certificate operations, OCSP requests, and CRL processing
 
@@ -70,39 +174,6 @@ openssl version
 # Should show OpenSSL 1.1.1+ or 3.0+
 ```
 
-#### 2. Python
-**Required Version**: Python 3.10+ (tested with Python 3.13)
-**Purpose**: Runtime environment for the application
-
-**Installation Instructions**:
-
-**Windows:**
-- Download from [python.org](https://www.python.org/downloads/)
-- Ensure "Add Python to PATH" is checked during installation
-
-**Linux:**
-```bash
-# Ubuntu/Debian
-sudo apt update
-sudo apt install python3.10 python3.10-pip python3.10-venv
-
-# CentOS/RHEL/Fedora
-sudo yum install python3.10 python3.10-pip
-```
-
-**macOS:**
-```bash
-# Using Homebrew
-brew install python@3.10
-
-# Or download from python.org
-```
-
-**Verification:**
-```bash
-python --version
-# Should show Python 3.10.0 or higher
-```
 
 ### GUI Requirements
 
@@ -125,6 +196,14 @@ sudo yum install tkinter
 - **No additional setup required**
 
 ## Installation
+
+### Prerequisites
+Before installing the OCSP Testing Tool, ensure you have installed:
+1. **Git** (for cloning the repository)
+2. **Python 3.10+** with pip (for running the application)
+3. **OpenSSL** (for certificate operations)
+
+See the [System Requirements](#system-requirements) section above for detailed installation instructions.
 
 ### 1. Clone or Download
 ```bash
@@ -150,6 +229,13 @@ pip install -r requirements.txt
 
 ### 4. Verify Installation
 ```bash
+# Check Git installation
+git --version
+
+# Check Python and pip installation
+python --version
+pip --version
+
 # Check Python dependencies
 python -c "import cryptography, requests, asn1crypto; print('All dependencies installed successfully')"
 
@@ -225,6 +311,29 @@ python -m ocsp_tester.cli --ocsp-url <URL> --issuer <cert-file>
 
 ### Common Issues
 
+#### Git Not Found
+```bash
+# Windows: Download and install from https://git-scm.com/download/win
+# Or using Chocolatey: choco install git
+
+# Linux (Ubuntu/Debian): sudo apt install git
+# Linux (CentOS/RHEL): sudo yum install git
+# macOS: brew install git
+```
+
+#### Python or pip Not Found
+```bash
+# Windows: Download from https://www.python.org/downloads/
+# Ensure "Add Python to PATH" is checked during installation
+
+# Linux (Ubuntu/Debian): sudo apt install python3 python3-pip
+# Linux (CentOS/RHEL): sudo yum install python3 python3-pip
+# macOS: brew install python@3.10
+
+# Verify pip installation
+python -m pip --version
+```
+
 #### OpenSSL Not Found
 ```bash
 # Windows: Add OpenSSL to PATH
@@ -247,7 +356,14 @@ sudo yum install tkinter     # CentOS/RHEL
 
 ### Verification Commands
 ```bash
-# Check all dependencies
+# Check Git installation
+git --version
+
+# Check Python and pip installation
+python --version
+pip --version
+
+# Check all Python dependencies
 python -c "
 import sys
 print(f'Python: {sys.version}')
@@ -267,6 +383,9 @@ try:
 except ImportError as e:
     print(f'asn1crypto: {e}')
 "
+
+# Check OpenSSL installation
+openssl version
 ```
 
 ## Advanced Configuration
