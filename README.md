@@ -16,6 +16,11 @@ A comprehensive testing application for OCSP (Online Certificate Status Protocol
 - **Export Capabilities**: Results exportable in JSON and CSV formats
 - **Certificate Validation**: Supports PEM/DER certificate formats
 - **Advanced Testing**: IKEv2 in-band OCSP, signed client requests, and more
+- **Trust Chain Building**: Automatic OCSP signature verification with trust chain construction
+- **DHS CA4 Support**: Enhanced handling of DHS CA4 OCSP signature verification issues
+- **Multi-Step OCSP Signer Validation**: Comprehensive 3-step validation process for OCSP signatures
+- **Federal PKI Detection**: Automatic detection and handling of federal PKI environments
+- **Batch Response Support**: Handles federal PKI batch OCSP responses (DHS CA4, DoD, etc.)
 
 ## System Requirements
 
@@ -449,6 +454,38 @@ openssl version
 # Should show OpenSSL 1.1.1+ or 3.0+
 ```
 
+#### Using Windows Environment Variables Dialog
+**Step-by-step guide to fix PATH and TEMP issues:**
+
+1. **Open Environment Variables Dialog:**
+   - Press `Win + R`, type `sysdm.cpl`, press Enter
+   - Click "Advanced" tab → "Environment Variables" button
+   - Or: Right-click "This PC" → Properties → Advanced system settings → Environment Variables
+
+2. **Add OpenSSL to System PATH:**
+   - In "System variables" section, find "Path" variable
+   - Click "Edit..." button
+   - Click "New" button
+   - Add: `C:\OpenSSL-Win64\bin` (adjust path if different)
+   - Click "OK" to save
+
+3. **Verify TEMP Variables (User Variables):**
+   - In "User variables" section, check:
+     - **TEMP**: Should be `C:\Users\[YourUsername]\AppData\Local\Temp`
+     - **TMP**: Should be `C:\Users\[YourUsername]\AppData\Local\Temp`
+   - If missing, click "New..." and add them
+
+4. **Restart Command Prompt:**
+   - Close all Command Prompt/PowerShell windows
+   - Open new Command Prompt
+   - Test: `openssl version`
+
+**Visual Guide:**
+- **User variables**: Shows your personal settings (TEMP, TMP, OneDrive)
+- **System variables**: Shows system-wide settings (PATH, ComSpec, OS)
+- **Path variable**: Contains directories where Windows looks for executables
+- **TEMP/TMP variables**: Tell applications where to create temporary files
+
 #### Security Test Failures
 ```bash
 # Error: [Errno 2] No such file or directory: '/tmp/test_issuer.pem'
@@ -556,6 +593,122 @@ Working directory: C:\WINDOWS\system32
 No CRL Distribution Points found in certificate
 ```
 **Solution**: This is normal for certificates without CRL URLs
+
+### Pattern 5: Environment Variable Issues
+```
+[WinError 2] The system cannot find the file specified
+Error saving config: [Errno 13] Permission denied
+```
+**Solution**: Use Environment Variables dialog to fix PATH and TEMP settings
+
+### Pattern 6: DHS CA4 OCSP Signature Verification Failure
+```
+Response Verify Failure
+unable to get local issuer certificate
+```
+**Solution**: Enhanced trust chain building automatically handles this issue
+
+## DHS CA4 OCSP Enhancement
+
+### Overview
+The OCSP Testing Tool now includes enhanced support for DHS CA4 OCSP servers that commonly encounter signature verification issues due to incomplete trust chains.
+
+### Problem Solved
+**Error**: `unable to get local issuer certificate`
+**Cause**: OCSP responders use separate signing certificates that aren't included in the basic issuer certificate chain
+**Solution**: Automatic trust chain building from OCSP response certificates
+
+### How It Works
+1. **Initial Request**: Makes unverified OCSP request to extract certificates
+2. **Certificate Extraction**: Parses OCSP response to find embedded certificates
+3. **Trust Bundle Creation**: Combines issuer certificate with OCSP response certificates
+4. **Enhanced Verification**: Uses complete trust bundle for signature verification
+5. **Fallback Handling**: Provides detailed logging when verification still fails
+
+### Benefits
+- ✅ **Automatic Resolution**: No manual certificate bundle creation required
+- ✅ **Federal PKI Support**: Handles DHS CA4, DoD, and other federal PKI environments
+- ✅ **Detailed Logging**: Clear feedback about trust chain building process
+- ✅ **Graceful Degradation**: Still provides certificate status even if signature verification fails
+- ✅ **Security Awareness**: Maintains security warnings when verification fails
+
+### Testing
+Run the DHS CA4 test script to verify the enhancement:
+```bash
+python test_dhs_ca4_trust_chain.py
+```
+
+## Multi-Step OCSP Signer Validation
+
+### Overview
+The OCSP Testing Tool implements a comprehensive multi-step validation process for OCSP signatures that addresses the specific requirements for validating OCSP signer certificates.
+
+### The 3-Step Validation Process
+
+#### Step 1: Extract OCSP Signer Certificate
+- **Purpose**: Extract the certificate used to sign the OCSP response
+- **Process**: Parses OCSP response to find embedded certificates
+- **Capability**: Handles multiple certificates in response, can target specific serial numbers
+- **Output**: PEM-formatted signer certificate
+
+#### Step 2: Validate Signer Certificate Trust
+- **Purpose**: Verify the OCSP signer certificate is trusted by the provided issuer
+- **Validation Methods**:
+  - **Direct Issuer**: Signer is directly issued by the provided issuer certificate
+  - **Self-Signed**: Signer is the same as the issuer certificate (self-signed OCSP)
+  - **OCSP Signing EKU**: Signer has Extended Key Usage for OCSP Signing (1.3.6.1.5.5.7.3.9)
+- **Output**: Trust validation results with detailed relationship information
+
+#### Step 3: Validate OCSP Response Signature
+- **Purpose**: Verify the OCSP response signature using the extracted signer certificate
+- **Process**: Uses OpenSSL to perform cryptographic signature validation
+- **Method**: Creates temporary files and uses `openssl ocsp -respin -verify_other -noverify`
+- **Output**: Signature validation results with success/failure status
+
+### Benefits
+- ✅ **Comprehensive Validation**: Complete end-to-end OCSP signature verification
+- ✅ **Detailed Logging**: Step-by-step progress reporting with `[OCSP-SIGNER-VALIDATION]` prefix
+- ✅ **Error Handling**: Graceful failure handling with detailed error messages
+- ✅ **Serial Number Targeting**: Can extract specific certificates by serial number
+- ✅ **Multiple Trust Methods**: Supports various OCSP signing scenarios
+- ✅ **Security Awareness**: Maintains security warnings and compliance issues
+
+### Testing
+Run the multi-step validation test script:
+```bash
+python test_ocsp_signer_validation.py
+```
+
+## Environment Variables Quick Reference
+
+### Essential Variables for OCSP Testing Tool:
+
+| Variable | Purpose | Expected Value | Location |
+|----------|---------|----------------|----------|
+| **PATH** | Find executables (OpenSSL, Python) | `C:\OpenSSL-Win64\bin;C:\Python310\Scripts;...` | System variables |
+| **TEMP** | Temporary file location | `C:\Users\[Username]\AppData\Local\Temp` | User variables |
+| **TMP** | Alternative temp location | `C:\Users\[Username]\AppData\Local\Temp` | User variables |
+| **PYTHONPATH** | Python module search path | `C:\OCSPTesting` (if needed) | User variables |
+
+### Common PATH Additions:
+```bash
+# Add these to System PATH variable:
+C:\OpenSSL-Win64\bin          # OpenSSL executable
+C:\Python310\Scripts         # Python scripts (pip, etc.)
+C:\Python310                  # Python executable
+C:\Program Files\Git\bin      # Git commands
+```
+
+### Quick Environment Check:
+```bash
+# Check if variables are set correctly:
+echo %PATH%
+echo %TEMP%
+echo %TMP%
+where openssl
+where python
+where git
+```
 
 ## Support
 

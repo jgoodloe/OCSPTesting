@@ -393,6 +393,7 @@ class OCSPTesterGUI(tk.Tk):
         ttk.Button(control_frame, text="Run CRL Check", command=self._run_crl_monitor).pack(side=tk.LEFT, padx=5)
         ttk.Button(control_frame, text="Show Test Results", command=self._show_test_results_in_monitor).pack(side=tk.LEFT, padx=5)
         ttk.Button(control_frame, text="Clear Log", command=self._clear_monitor_log).pack(side=tk.LEFT, padx=5)
+        ttk.Button(control_frame, text="Clear Response", command=self._clear_response).pack(side=tk.LEFT, padx=5)
         
         # Log filter options
         filter_frame = ttk.Frame(self.monitor_frame)
@@ -884,6 +885,12 @@ Copyright (c) 2025 OCSP Testing Tool"""
         """Clear monitoring log"""
         self.monitor_output.delete(1.0, tk.END)
         self.console_log_output.delete(1.0, tk.END)
+
+    def _clear_response(self) -> None:
+        """Clear OCSP/CRL response summaries"""
+        self.ocsp_summary.set("")
+        self.crl_summary.set("")
+        self._log_monitor("[INFO] Response summaries cleared\n")
 
     def _enable_all_debug(self) -> None:
         """Enable all debug logging options"""
