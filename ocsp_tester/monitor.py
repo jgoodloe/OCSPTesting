@@ -76,51 +76,78 @@ class OCSPMonitor:
             self.log(f"[VALIDITY] ERROR: {str(e)}\n")
             return False, None, None
 
-    def run_ocsp_check(self, cert_path: str, issuer_path: str, ocsp_url: str) -> Dict[str, Any]:
+    def run_ocsp_check(self, cert_path: str, issuer_path: str, ocsp_url: str, cert_serial: str = None) -> Dict[str, Any]:
         """Run comprehensive OCSP check"""
         try:
             self.log("[INFO] Running OCSP check...\n")
             
-            # If no OCSP URL provided, extract it from the certificate's AIA extension
+            # If no OCSP URL provided, extract it from the certificate's AIA extension (only if cert file provided)
             if not ocsp_url or ocsp_url.strip() == "":
-                self.log("[INFO] No OCSP URL provided, extracting from certificate's Authority Information Access...\n")
-                extracted_ocsp_url = self.extract_ocsp_url_from_cert(cert_path)
-                if extracted_ocsp_url:
-                    ocsp_url = extracted_ocsp_url
-                    self.log(f"[INFO] Extracted OCSP URL from certificate: {ocsp_url}\n")
+                if cert_path:
+                    self.log("[INFO] No OCSP URL provided, extracting from certificate's Authority Information Access...\n")
+                    extracted_ocsp_url = self.extract_ocsp_url_from_cert(cert_path)
+                    if extracted_ocsp_url:
+                        ocsp_url = extracted_ocsp_url
+                        self.log(f"[INFO] Extracted OCSP URL from certificate: {ocsp_url}\n")
+                    else:
+                        self.log("[ERROR] No OCSP URL found in certificate's Authority Information Access extension\n")
+                        self.log("[INFO] This certificate may not have OCSP URLs in its AIA extension\n")
+                        self.log("[INFO] Please provide an OCSP URL manually or check if the certificate has an AIA extension with OCSP URLs\n")
+                        self.log("[INFO] Common OCSP URL patterns to try:\n")
+                        self.log("[INFO] - http://ocsp.<domain>\n")
+                        self.log("[INFO] - https://ocsp.<domain>\n")
+                        self.log("[INFO] - http://<domain>/ocsp\n")
+                        self.log("[INFO] - https://<domain>/ocsp\n")
+                        return {
+                            "summary": "[OCSP CHECK SUMMARY]\n[ERROR] No OCSP URL provided and none found in certificate\n[INFO] This certificate may not have OCSP URLs in its AIA extension\n[INFO] Please provide an OCSP URL manually or check certificate AIA extension\n[INFO] Common OCSP URL patterns to try: http://ocsp.<domain>, https://ocsp.<domain>, http://<domain>/ocsp, https://<domain>/ocsp\n",
+                            "error": "No OCSP URL available - please provide manually"
+                        }
                 else:
-                    self.log("[ERROR] No OCSP URL found in certificate's Authority Information Access extension\n")
-                    self.log("[INFO] This certificate may not have OCSP URLs in its AIA extension\n")
-                    self.log("[INFO] Please provide an OCSP URL manually or check if the certificate has an AIA extension with OCSP URLs\n")
+                    self.log("[ERROR] No OCSP URL provided and no certificate file available for AIA extraction\n")
+                    self.log("[INFO] When using serial numbers, you must provide the OCSP URL manually\n")
                     self.log("[INFO] Common OCSP URL patterns to try:\n")
                     self.log("[INFO] - http://ocsp.<domain>\n")
                     self.log("[INFO] - https://ocsp.<domain>\n")
                     self.log("[INFO] - http://<domain>/ocsp\n")
                     self.log("[INFO] - https://<domain>/ocsp\n")
                     return {
-                        "summary": "[OCSP CHECK SUMMARY]\n[ERROR] No OCSP URL provided and none found in certificate\n[INFO] This certificate may not have OCSP URLs in its AIA extension\n[INFO] Please provide an OCSP URL manually or check certificate AIA extension\n[INFO] Common OCSP URL patterns to try: http://ocsp.<domain>, https://ocsp.<domain>, http://<domain>/ocsp, https://<domain>/ocsp\n",
+                        "summary": "[OCSP CHECK SUMMARY]\n[ERROR] No OCSP URL provided and no certificate file available for AIA extraction\n[INFO] When using serial numbers, you must provide the OCSP URL manually\n[INFO] Common OCSP URL patterns to try: http://ocsp.<domain>, https://ocsp.<domain>, http://<domain>/ocsp, https://<domain>/ocsp\n",
                         "error": "No OCSP URL available - please provide manually"
                     }
             
-            # Check validity period if enabled
+            # Check validity period if enabled and certificate file is provided
             validity_ok = None
             validity_start = None
             validity_end = None
-            if self.check_validity:
+            if self.check_validity and cert_path:
                 validity_ok, validity_start, validity_end = self.check_certificate_validity(cert_path)
 
             # Try to build a complete trust chain for OCSP signature verification
-            trust_chain_path = self._build_ocsp_trust_chain(issuer_path, ocsp_url, cert_path)
+            trust_chain_path = self._build_ocsp_trust_chain(issuer_path, ocsp_url, cert_path, cert_serial)
             
+            # Build OCSP command - use either certificate file or serial number
             ocsp_cmd = [
                 "openssl", "ocsp", 
                 "-issuer", issuer_path, 
-                "-cert", cert_path, 
                 "-url", ocsp_url, 
                 "-resp_text", 
                 "-verify_other", trust_chain_path if trust_chain_path else issuer_path,
                 "-trust_other"
             ]
+            
+            # Add either certificate file or serial number
+            if cert_serial:
+                ocsp_cmd.extend(["-serial", cert_serial])
+                self.log(f"[INFO] Using serial number: {cert_serial}\n")
+            elif cert_path:
+                ocsp_cmd.extend(["-cert", cert_path])
+                self.log(f"[INFO] Using certificate file: {cert_path}\n")
+            else:
+                self.log("[ERROR] Neither certificate file nor serial number provided\n")
+                return {
+                    "summary": "[OCSP CHECK SUMMARY]\n[ERROR] Neither certificate file nor serial number provided\n",
+                    "error": "No certificate or serial number provided"
+                }
             
             self.log("[CMD] " + " ".join(ocsp_cmd) + "\n")
             result = subprocess.run(ocsp_cmd, capture_output=True, text=True, timeout=20)
@@ -235,7 +262,12 @@ class OCSPMonitor:
             if stdout:
                 try:
                     # Extract certificate serial number for batch response handling
-                    target_serial = self._extract_certificate_serial(cert_path)
+                    if cert_serial:
+                        # Use the provided serial number directly
+                        target_serial = cert_serial
+                    else:
+                        # Extract from certificate file
+                        target_serial = self._extract_certificate_serial(cert_path)
                     certificate_status_details = self.parse_certificate_status_details(stdout, target_serial)
                 except Exception as e:
                     self.log(f"[STATUS] Error during certificate status parsing: {str(e)}\n")
@@ -268,7 +300,7 @@ class OCSPMonitor:
             results["certificate_status_details"] = certificate_status_details
             
             # Multi-step OCSP Signer Validation Process
-            ocsp_signer_validation = self._perform_ocsp_signer_validation(stdout, issuer_path, ocsp_url, cert_path)
+            ocsp_signer_validation = self._perform_ocsp_signer_validation(stdout, issuer_path, ocsp_url, cert_path, cert_serial)
             results["ocsp_signer_validation"] = ocsp_signer_validation
             
             # Detect federal PKI environment and add to results
@@ -1168,10 +1200,29 @@ class OCSPMonitor:
             
             # Find the specific certificate we're looking for
             target_response = None
-            for response in batch_responses:
-                if response["serial_number"].upper() == target_serial.upper():
-                    target_response = response
-                    break
+            if target_serial:
+                # Convert decimal serial to hex if needed for comparison
+                try:
+                    # Check if target_serial is decimal (all digits)
+                    if target_serial.isdigit():
+                        # Convert decimal to hex
+                        hex_serial = hex(int(target_serial))[2:].upper()
+                        self.log(f"[STATUS] [INFO] Converting decimal serial {target_serial} to hex {hex_serial}\n")
+                    else:
+                        # Already in hex format
+                        hex_serial = target_serial.upper()
+                    
+                    for response in batch_responses:
+                        if response["serial_number"].upper() == hex_serial:
+                            target_response = response
+                            break
+                except Exception as e:
+                    self.log(f"[STATUS] [ERROR] Error converting serial number: {e}\n")
+                    # Fallback to direct comparison
+                    for response in batch_responses:
+                        if response["serial_number"].upper() == target_serial.upper():
+                            target_response = response
+                            break
             
             if target_response:
                 self.log(f"[STATUS] [OK] Found target certificate {target_serial} in batch response\n")
@@ -6295,11 +6346,12 @@ INVALID_ISSUER_CERTIFICATE_DATA
             self.log(f"[SIGNATURE-VERIFY] Response parsing validation exception: {str(e)}\n")
             return False
     
-    def _build_ocsp_trust_chain(self, issuer_path: str, ocsp_url: str, cert_path: str) -> Optional[str]:
+    def _build_ocsp_trust_chain(self, issuer_path: str, ocsp_url: str, cert_path: str = None, cert_serial: str = None) -> Optional[str]:
         """
         Build a complete trust chain for OCSP signature verification.
         This addresses the 'unable to get local issuer certificate' error by
         attempting to download and include all necessary certificates.
+        Works with either certificate files or serial numbers.
         """
         try:
             self.log(f"[TRUST-CHAIN] Building OCSP trust chain for {ocsp_url}\n")
@@ -6308,11 +6360,21 @@ INVALID_ISSUER_CERTIFICATE_DATA
             temp_cmd = [
                 "openssl", "ocsp", 
                 "-issuer", issuer_path, 
-                "-cert", cert_path,  # Use actual certificate for initial request
                 "-url", ocsp_url, 
                 "-resp_text",
                 "-noverify"  # Skip verification for initial response
             ]
+            
+            # Add either certificate file or serial number
+            if cert_serial:
+                temp_cmd.extend(["-serial", cert_serial])
+                self.log(f"[TRUST-CHAIN] Using serial number for trust chain building: {cert_serial}\n")
+            elif cert_path:
+                temp_cmd.extend(["-cert", cert_path])
+                self.log(f"[TRUST-CHAIN] Using certificate file for trust chain building: {cert_path}\n")
+            else:
+                self.log("[TRUST-CHAIN] [ERROR] Neither certificate file nor serial number provided for trust chain building\n")
+                return None
             
             self.log(f"[TRUST-CHAIN] [CMD] {' '.join(temp_cmd)}\n")
             temp_result = subprocess.run(temp_cmd, capture_output=True, text=True, timeout=15)
@@ -6536,7 +6598,7 @@ INVALID_ISSUER_CERTIFICATE_DATA
         
         return validation_results
     
-    def _validate_ocsp_response_signature(self, ocsp_response: str, signer_cert_pem: str, issuer_cert_path: str, cert_path: str, ocsp_url: str) -> Dict[str, Any]:
+    def _validate_ocsp_response_signature(self, ocsp_response: str, signer_cert_pem: str, issuer_cert_path: str, cert_path: str, ocsp_url: str, cert_serial: str = None) -> Dict[str, Any]:
         """
         Validate the OCSP response signature using the extracted signer certificate.
         Since we can't easily extract the raw binary OCSP response, we'll use a different approach:
@@ -6566,12 +6628,21 @@ INVALID_ISSUER_CERTIFICATE_DATA
                 verify_cmd = [
                     "openssl", "ocsp",
                     "-issuer", issuer_cert_path,
-                    "-cert", cert_path,
                     "-url", ocsp_url,
                     "-verify_other", signer_cert_file,
                     "-trust_other",
                     "-resp_text"
                 ]
+                
+                # Add either certificate file or serial number
+                if cert_serial:
+                    verify_cmd.extend(["-serial", cert_serial])
+                elif cert_path:
+                    verify_cmd.extend(["-cert", cert_path])
+                else:
+                    validation_results["signature_valid"] = False
+                    validation_results["errors"].append("Neither certificate file nor serial number provided for signature validation")
+                    return validation_results
                 
                 self.log(f"[OCSP-SIGNATURE] [CMD] {' '.join(verify_cmd)}\n")
                 result = subprocess.run(verify_cmd, capture_output=True, text=True, timeout=15)
@@ -6615,7 +6686,7 @@ INVALID_ISSUER_CERTIFICATE_DATA
         
         return validation_results
     
-    def _perform_ocsp_signer_validation(self, ocsp_response: str, issuer_cert_path: str, ocsp_url: str, cert_path: str) -> Dict[str, Any]:
+    def _perform_ocsp_signer_validation(self, ocsp_response: str, issuer_cert_path: str, ocsp_url: str, cert_path: str, cert_serial: str = None) -> Dict[str, Any]:
         """
         Perform comprehensive multi-step OCSP signer validation:
         1. Extract OCSP signer certificate from response
@@ -6668,7 +6739,7 @@ INVALID_ISSUER_CERTIFICATE_DATA
                     
                     # Step 3: Validate OCSP response signature with signer certificate
                     self.log(f"[OCSP-SIGNER-VALIDATION] Step 3/3: Validating OCSP response signature\n")
-                    signature_validation = self._validate_ocsp_response_signature(ocsp_response, signer_cert_pem, issuer_cert_path, cert_path, ocsp_url)
+                    signature_validation = self._validate_ocsp_response_signature(ocsp_response, signer_cert_pem, issuer_cert_path, cert_path, ocsp_url, cert_serial)
                     validation_summary["signature_validation"] = signature_validation
                     
                     if signature_validation["signature_valid"]:

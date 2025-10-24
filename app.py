@@ -61,6 +61,9 @@ class OCSPTesterGUI(tk.Tk):
         self.var_good_cert = tk.StringVar(value=self.config.good_cert)
         self.var_revoked_cert = tk.StringVar(value=self.config.revoked_cert)
         self.var_unknown_ca_cert = tk.StringVar(value=self.config.unknown_ca_cert)
+        
+        # Serial number variable for OCSP/CRL Monitor tab only
+        self.var_cert_serial = tk.StringVar(value="")
 
         # Optional client signing for sigRequired/auth tests
         self.var_client_cert = tk.StringVar(value=self.config.client_cert)
@@ -368,6 +371,10 @@ class OCSPTesterGUI(tk.Tk):
         ttk.Label(cert_frame, text="Certificate File:").grid(row=1, column=0, sticky=tk.E)
         ttk.Entry(cert_frame, textvariable=self.var_good_cert, width=80).grid(row=1, column=1, sticky=tk.W)
         ttk.Button(cert_frame, text="Browse", command=lambda: self._browse(self.var_good_cert)).grid(row=1, column=2)
+        
+        ttk.Label(cert_frame, text="OR Serial Number:").grid(row=2, column=0, sticky=tk.E)
+        ttk.Entry(cert_frame, textvariable=self.var_cert_serial, width=80).grid(row=2, column=1, sticky=tk.W)
+        ttk.Label(cert_frame, text="(hex: 0x123, decimal: 123)").grid(row=2, column=2, sticky=tk.W)
 
         # URLs
         url_frame = ttk.Frame(self.monitor_frame)
@@ -881,6 +888,40 @@ Copyright (c) 2025 OCSP Testing Tool"""
         # Also print to stdout so it appears in console log
         print(text, end='')
 
+    def _parse_serial_number(self, serial_str: str) -> str:
+        """Parse serial number string and convert hex to decimal if needed"""
+        if not serial_str or not serial_str.strip():
+            return ""
+        
+        serial_str = serial_str.strip()
+        
+        # Handle hex format (0x prefix)
+        if serial_str.startswith('0x') or serial_str.startswith('0X'):
+            try:
+                # Convert hex to decimal
+                decimal_value = int(serial_str, 16)
+                return str(decimal_value)
+            except ValueError:
+                self._log_monitor(f"[WARN] Invalid hex serial number: {serial_str}\n")
+                return serial_str
+        
+        # Handle negative decimal
+        if serial_str.startswith('-'):
+            try:
+                int(serial_str)  # Validate it's a valid integer
+                return serial_str
+            except ValueError:
+                self._log_monitor(f"[WARN] Invalid negative serial number: {serial_str}\n")
+                return serial_str
+        
+        # Handle positive decimal
+        try:
+            int(serial_str)  # Validate it's a valid integer
+            return serial_str
+        except ValueError:
+            self._log_monitor(f"[WARN] Invalid serial number format: {serial_str}\n")
+            return serial_str
+
     def _clear_monitor_log(self) -> None:
         """Clear monitoring log"""
         self.monitor_output.delete(1.0, tk.END)
@@ -999,18 +1040,31 @@ Copyright (c) 2025 OCSP Testing Tool"""
     def _run_ocsp_monitor(self) -> None:
         """Run OCSP monitoring check"""
         cert = self.var_good_cert.get()
+        cert_serial = self.var_cert_serial.get()
         issuer = self.var_issuer_path.get()
         url = self.var_ocsp_url.get()
         
-        if not cert or not issuer:
-            messagebox.showerror("Input Error", "Please select both a certificate and issuer file.")
+        # Check if either certificate file or serial number is provided
+        if not cert and not cert_serial:
+            messagebox.showerror("Input Error", "Please provide either a certificate file or serial number.")
             return
+            
+        if not issuer:
+            messagebox.showerror("Input Error", "Please select an issuer certificate file.")
+            return
+        
+        # Parse serial number if provided
+        if cert_serial:
+            cert_serial = self._parse_serial_number(cert_serial)
+            if not cert_serial:
+                messagebox.showerror("Input Error", "Invalid serial number format.")
+                return
             
         # Update monitor settings
         self.monitor.check_validity = self.var_check_validity.get()
         
         # If no OCSP URL provided, it will be extracted from the certificate's AIA extension
-        threading.Thread(target=self._ocsp_monitor_thread, args=(cert, issuer, url), daemon=True).start()
+        threading.Thread(target=self._ocsp_monitor_thread, args=(cert, cert_serial, issuer, url), daemon=True).start()
 
     def _run_crl_monitor(self) -> None:
         """Run CRL monitoring check"""
@@ -1027,10 +1081,10 @@ Copyright (c) 2025 OCSP Testing Tool"""
         
         threading.Thread(target=self._crl_monitor_thread, args=(cert, issuer, crl_url), daemon=True).start()
 
-    def _ocsp_monitor_thread(self, cert: str, issuer: str, url: str) -> None:
+    def _ocsp_monitor_thread(self, cert: str, cert_serial: str, issuer: str, url: str) -> None:
         """OCSP monitoring thread"""
         try:
-            results = self.monitor.run_ocsp_check(cert, issuer, url)
+            results = self.monitor.run_ocsp_check(cert, issuer, url, cert_serial)
             if "summary" in results:
                 self.ocsp_summary.set(results["summary"])
         except Exception as exc:

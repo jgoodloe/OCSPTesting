@@ -107,6 +107,8 @@ class TestRunner:
         unknown_ca = None
         
         self._log("[DEBUG] Loading additional certificates...\n")
+        
+        # Handle known-good certificate (file only)
         if inputs.known_good_cert_path:
             self._log(f"[DEBUG] Loading known-good certificate from: {inputs.known_good_cert_path}\n")
             try:
@@ -115,6 +117,8 @@ class TestRunner:
             except Exception as exc:
                 self._log(f"[DEBUG] Failed to load known-good certificate: {str(exc)}\n")
                 results.append(self._err("Setup", "Load known-good certificate", str(exc)))
+            
+        # Handle known-revoked certificate (file only)
         if inputs.known_revoked_cert_path:
             self._log(f"[DEBUG] Loading known-revoked certificate from: {inputs.known_revoked_cert_path}\n")
             try:
@@ -123,6 +127,7 @@ class TestRunner:
             except Exception as exc:
                 self._log(f"[DEBUG] Failed to load known-revoked certificate: {str(exc)}\n")
                 results.append(self._err("Setup", "Load known-revoked certificate", str(exc)))
+            
         if inputs.unknown_ca_cert_path:
             self._log(f"[DEBUG] Loading unknown-CA certificate from: {inputs.unknown_ca_cert_path}\n")
             try:
@@ -269,5 +274,11 @@ class TestRunner:
     @staticmethod
     def _err(category: str, name: str, msg: str) -> TestCaseResult:
         r = TestCaseResult(id=str(uuid.uuid4()), category=category, name=name, status=TestStatus.ERROR, message=msg)
+        r.end()
+        return r
+    
+    @staticmethod
+    def _create_skip_result(category: str, name: str, msg: str) -> TestCaseResult:
+        r = TestCaseResult(id=str(uuid.uuid4()), category=category, name=name, status=TestStatus.SKIP, message=msg)
         r.end()
         return r
