@@ -154,3 +154,4 @@ if __name__ == "__main__":
     else:
         print("\n[FAILED] Test encountered errors.")
         print("Please check the certificate file paths and try again.")
+

@@ -12,6 +12,8 @@ class OCSPConfig:
     good_cert: str = ""
     revoked_cert: str = ""
     unknown_ca_cert: str = ""
+    # Optional direct serial input for monitor/OCSP checks
+    cert_serial: str = ""
     client_cert: str = ""
     client_key: str = ""
     latency_samples: int = 5
@@ -48,29 +50,64 @@ class ConfigManager:
     """Manages saving and loading of configuration"""
     
     def __init__(self, config_file: str = "ocsp_config.json"):
-        self.config_file = config_file
+        # Prefer a user-writable location by default (Windows LOCALAPPDATA if available; else home dir)
+        local_appdata = os.getenv("LOCALAPPDATA") or os.getenv("APPDATA")
+        if local_appdata:
+            default_dir = os.path.join(local_appdata, "OCSPTesting")
+        else:
+            default_dir = os.path.join(os.path.expanduser("~"), ".ocsp_testing")
+        os.makedirs(default_dir, exist_ok=True)
+
+        user_config_path = os.path.join(default_dir, "ocsp_config.json")
+
+        # If a custom path was provided, honor it; otherwise use the user config path
+        self.config_file = user_config_path if config_file == "ocsp_config.json" else config_file
+        # Legacy path (project root) for backward-compat loading
+        self.legacy_config_file = "ocsp_config.json"
         self.config = OCSPConfig()
     
     def load_config(self) -> OCSPConfig:
         """Load configuration from file"""
-        if os.path.exists(self.config_file):
-            try:
-                with open(self.config_file, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    # Update config with loaded data
-                    for key, value in data.items():
-                        if hasattr(self.config, key):
-                            setattr(self.config, key, value)
-            except Exception as e:
-                print(f"Error loading config: {e}")
-                # Keep default config
+        candidates = [self.config_file]
+        # Also try legacy project-root file if different
+        if self.legacy_config_file not in candidates:
+            candidates.append(self.legacy_config_file)
+
+        for path in candidates:
+            if os.path.exists(path):
+                try:
+                    with open(path, 'r', encoding='utf-8') as f:
+                        data = json.load(f)
+                        # Update config with loaded data
+                        for key, value in data.items():
+                            if hasattr(self.config, key):
+                                setattr(self.config, key, value)
+                    # If we loaded from legacy location, attempt to migrate by saving to new location
+                    if path != self.config_file:
+                        try:
+                            self.save_config(self.config)
+                        except Exception:
+                            # Non-fatal if migration fails
+                            pass
+                    break
+                except Exception as e:
+                    print(f"Error loading config from {path}: {e}")
+                    # Try next candidate
+                    continue
         return self.config
     
     def save_config(self, config: OCSPConfig) -> bool:
-        """Save configuration to file"""
+        """Save configuration to file (atomic, with fallback-friendly path)"""
         try:
-            with open(self.config_file, 'w', encoding='utf-8') as f:
+            # Ensure directory exists
+            config_dir = os.path.dirname(self.config_file) or "."
+            os.makedirs(config_dir, exist_ok=True)
+
+            tmp_path = self.config_file + ".tmp"
+            with open(tmp_path, 'w', encoding='utf-8') as f:
                 json.dump(asdict(config), f, indent=2)
+            # Atomic replace where supported (Windows: os.replace also overwrites)
+            os.replace(tmp_path, self.config_file)
             return True
         except Exception as e:
             print(f"Error saving config: {e}")

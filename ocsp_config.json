@@ -1,7 +1,7 @@
 {
-  "ocsp_url": "http://ocsp.dimc.dhs.gov",
-  "issuer_path": "C:/Users/jcgoo/Downloads/GARYCISDHSCA4.cer",
-  "good_cert": "C:/Users/jcgoo/Downloads/GARYCIS.pem",
+  "ocsp_url": "http://ocsp.xca.xpki.com/ocsp",
+  "issuer_path": "C:/ocsptesting/OCSPTesting/assets/jasonocsptestissuer.cer",
+  "good_cert": "C:/ocsptesting/OCSPTesting/assets/jasonocsptest.cer",
   "revoked_cert": "",
   "unknown_ca_cert": "C:/ocsptesting/OCSPTesting/assets/timdhsca4.cer",
   "client_cert": "",

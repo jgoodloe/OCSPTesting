@@ -784,6 +784,8 @@ Copyright (c) 2025 OCSP Testing Tool"""
             self.config.ocsp_url = self.var_ocsp_url.get().strip()
             self.config.issuer_path = self.var_issuer_path.get().strip()
             self.config.good_cert = self.var_good_cert.get().strip()
+            # Persist optional serial number used in monitor OCSP checks
+            self.config.cert_serial = self.var_cert_serial.get().strip()
             self.config.revoked_cert = self.var_revoked_cert.get().strip()
             self.config.unknown_ca_cert = self.var_unknown_ca_cert.get().strip()
             self.config.client_cert = self.var_client_cert.get().strip()
@@ -833,6 +835,8 @@ Copyright (c) 2025 OCSP Testing Tool"""
             self.var_ocsp_url.set(self.config.ocsp_url)
             self.var_issuer_path.set(self.config.issuer_path)
             self.var_good_cert.set(self.config.good_cert)
+            # Restore optional serial number if present
+            self.var_cert_serial.set(getattr(self.config, 'cert_serial', ""))
             self.var_revoked_cert.set(self.config.revoked_cert)
             self.var_unknown_ca_cert.set(self.config.unknown_ca_cert)
             self.var_client_cert.set(self.config.client_cert)
