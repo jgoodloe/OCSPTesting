@@ -1,16 +1,9 @@
 name: Create Release
 
 on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: "Tag to create the release under (e.g. v1.0.0)"
-        required: true
-        default: "v1.0.0"
-      target:
-        description: "Branch or commit SHA the tag should point to"
-        required: true
-        default: "main"
+  push:
+    tags:
+      - "v*"
 
 permissions:
   contents: write
@@ -25,13 +18,14 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          notes_file=".github/release-notes/${{ inputs.tag }}.md"
+          tag="${{ github.ref_name }}"
+          notes_file=".github/release-notes/${tag}.md"
           if [ ! -f "$notes_file" ]; then
             echo "Release notes file $notes_file not found" >&2
             exit 1
           fi
-          gh release create "${{ inputs.tag }}" \
+          gh release create "$tag" \
             --repo "${{ github.repository }}" \
-            --target "${{ inputs.target }}" \
-            --title "OCSP Server Test Suite ${{ inputs.tag }}" \
-            --notes-file "$notes_file"
+            --title "OCSP Server Test Suite $tag" \
+            --notes-file "$notes_file" \
+            --verify-tag
