@@ -618,12 +618,12 @@ class OCSPSignatureVerifier:
         
         overall_result = verification_results.get("overall_result", "UNKNOWN")
         
-            if overall_result == "PASSED":
-                self.log("OVERALL RESULT: PASSED [OK]")
-            elif overall_result == "PARTIAL":
-                self.log("OVERALL RESULT: PARTIAL [WARN]")
-            else:
-                self.log("OVERALL RESULT: FAILED [ERROR]")
+        if overall_result == "PASSED":
+            self.log("OVERALL RESULT: PASSED [OK]")
+        elif overall_result == "PARTIAL":
+            self.log("OVERALL RESULT: PARTIAL [WARN]")
+        else:
+            self.log("OVERALL RESULT: FAILED [ERROR]")
         
         # Display each step
         steps = verification_results.get("verification_steps", {})
