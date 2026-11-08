@@ -1,6 +1,6 @@
 # Core dependencies for OCSP Testing Application
 cryptography>=49.0.0,<51.0.0
-requests>=2.31.0,<3.0.0
+requests>=2.34.2,<3.0.0
 asn1crypto>=1.5.1,<2.0.0
 
 # Optional dependencies for enhanced functionality
