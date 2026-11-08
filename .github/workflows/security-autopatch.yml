@@ -1,0 +1,160 @@
+name: Security Autopatch
+
+# Daily watch for published CVE fixes in the project's dependencies.
+# When a fix exists outside the allowed version range in requirements.txt,
+# this workflow raises the range, re-runs the full check suite, and — only
+# if everything passes — commits the bump and publishes a patch release.
+# If checks fail, or a vulnerability has no fix, no release happens:
+# an issue is opened and assigned to the owner to decide.
+
+on:
+  schedule:
+    - cron: "43 10 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+
+concurrency:
+  group: security-autopatch
+  cancel-in-progress: false
+
+jobs:
+  autopatch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install tooling
+        run: pip install pip-audit packaging
+
+      - name: Audit dependencies and raise vulnerable ranges
+        id: patch
+        run: |
+          python scripts/security_autopatch.py audit
+          {
+            echo "changed=$(python -c "import json; print(str(json.load(open('autopatch-summary.json'))['changed']).lower())")"
+            echo "unfixable=$(python -c "import json; print(str(bool(json.load(open('autopatch-summary.json'))['unfixable'])).lower())")"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Verify patched requirements (install, re-audit, smoke test)
+        id: verify
+        if: steps.patch.outputs.changed == 'true'
+        continue-on-error: true
+        run: |
+          pip install -r requirements.txt
+          pip-audit -r requirements.txt
+          python scripts/smoke_test.py
+
+      - name: Commit bump and publish patch release
+        id: publish
+        if: steps.patch.outputs.changed == 'true' && steps.verify.outcome == 'success'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          latest=$(gh release view --repo "$GITHUB_REPOSITORY" --json tagName --jq .tagName)
+          base="${latest#v}"
+          IFS=. read -r major minor patch <<< "$base"
+          next="v${major}.${minor}.$((patch + 1))"
+          echo "next=$next" >> "$GITHUB_OUTPUT"
+          notes=".github/release-notes/${next}.md"
+
+          python scripts/security_autopatch.py notes --version "$next" --output "$notes"
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add requirements.txt "$notes"
+          git commit -m "fix(security): raise dependency ranges for published CVE fixes ($next)"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
+
+          gh release create "$next" \
+            --repo "$GITHUB_REPOSITORY" \
+            --target "$(git rev-parse HEAD)" \
+            --title "OCSP Server Test Suite $next" \
+            --notes-file "$notes"
+
+      - name: Notify owner of the automated release
+        if: steps.publish.outcome == 'success' && steps.publish.outputs.next != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          next="${{ steps.publish.outputs.next }}"
+          {
+            echo "The security-autopatch workflow found published CVE fixes for a dependency, raised the version range in requirements.txt, ran the full check suite (install, re-audit, smoke test on the updated dependencies), and published **$next** automatically."
+            echo ""
+            echo "Release: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/releases/tag/$next"
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo ""
+            echo "No action is required; this issue is informational. Close it once you've seen it. If the release should not have happened, delete it from the releases page and revert the commit."
+          } > issue-body.md
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "Automated security release $next published" \
+            --assignee "${{ github.repository_owner }}" \
+            --body-file issue-body.md
+
+      - name: Alert owner that autopatch is blocked
+        if: steps.patch.outputs.changed == 'true' && steps.verify.outcome == 'failure'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Security autopatch blocked: fix available but checks failed"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "in:title \"$title\"" --json number --jq 'length')
+          if [ "$existing" -gt 0 ]; then
+            echo "An alert issue is already open; not creating a duplicate."
+            exit 0
+          fi
+          {
+            echo "A dependency has a published CVE fix outside the allowed range in requirements.txt, but after raising the range the check suite (install, re-audit, smoke test) FAILED — most likely the new library version breaks the code. **No release was published and no changes were committed.**"
+            echo ""
+            echo "Failed run (see logs and the audit summary): $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo ""
+            echo "Your decision is needed:"
+            echo "1. Adapt the code to the new library version, then release normally - the gate will pass."
+            echo "2. Or release anyway via Actions -> Create Release -> Run workflow with skip_checks (not recommended while the smoke test fails)."
+            echo ""
+            echo "Close this issue once resolved. The workflow will keep failing daily (without duplicate issues) until the vulnerability is addressed."
+          } > issue-body.md
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "$title" \
+            --assignee "${{ github.repository_owner }}" \
+            --body-file issue-body.md
+
+      - name: Alert owner about vulnerabilities with no published fix
+        if: steps.patch.outputs.unfixable == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Dependency vulnerability needs a manual decision"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "in:title \"$title\"" --json number --jq 'length')
+          if [ "$existing" -gt 0 ]; then
+            echo "An alert issue is already open; not creating a duplicate."
+            exit 0
+          fi
+          {
+            echo "The daily security audit found vulnerabilities that cannot be fixed automatically (no published fix version, or the package is not a direct requirement):"
+            echo ""
+            echo '```json'
+            python -c "import json; print(json.dumps(json.load(open('autopatch-summary.json'))['unfixable'], indent=2))"
+            echo '```'
+            echo ""
+            echo "Run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo ""
+            echo "Review the advisories and decide how to proceed (wait for a fix, mitigate, or pin differently). Close this issue once resolved."
+          } > issue-body.md
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "$title" \
+            --assignee "${{ github.repository_owner }}" \
+            --body-file issue-body.md
+
+      - name: Fail the run when autopatch is blocked
+        if: steps.patch.outputs.changed == 'true' && steps.verify.outcome == 'failure'
+        run: |
+          echo "::error::A CVE fix is available but the verification suite failed; see the assigned issue."
+          exit 1
