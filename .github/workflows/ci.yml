@@ -1,0 +1,82 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+  workflow_call:
+  schedule:
+    # Weekly security audit, Monday 06:17 UTC
+    - cron: "17 6 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Smoke test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12", "3.14"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run smoke test
+        run: python scripts/smoke_test.py
+
+  security-audit:
+    name: Dependency CVE audit (pip-audit)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Audit pinned requirements for known CVEs
+        run: pip-audit -r requirements.txt
+
+  alert-on-scheduled-failure:
+    name: Open issue if weekly audit fails
+    runs-on: ubuntu-latest
+    needs: [test, security-audit]
+    if: always() && github.event_name == 'schedule' && contains(needs.*.result, 'failure')
+    permissions:
+      issues: write
+    steps:
+      - name: Create alert issue unless one is already open
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          title="Scheduled security/CI check failed"
+          existing=$(gh issue list --repo "$GITHUB_REPOSITORY" --state open \
+            --search "in:title \"$title\"" --json number --jq 'length')
+          if [ "$existing" -gt 0 ]; then
+            echo "An alert issue is already open; not creating a duplicate."
+            exit 0
+          fi
+          {
+            echo "The weekly scheduled run of CI failed — most likely a new CVE affects a pinned dependency, or the code no longer passes the smoke test."
+            echo ""
+            echo "Failed run: $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+            echo ""
+            echo "Until this is resolved, release gating will block new releases. Review the run logs, decide on the fix (usually a dependency bump in requirements.txt), and close this issue once CI is green again."
+          } > issue-body.md
+          gh issue create --repo "$GITHUB_REPOSITORY" \
+            --title "$title" \
+            --assignee "${{ github.repository_owner }}" \
+            --body-file issue-body.md
